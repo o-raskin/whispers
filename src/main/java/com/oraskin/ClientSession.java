@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
+
+import static com.oraskin.HeaderUtil.buildHeader;
 
 public final class ClientSession {
 
@@ -27,34 +29,35 @@ public final class ClientSession {
         return userId;
     }
 
-    public void sendText(String message) throws IOException {
-        sendFrame(0x1, message.getBytes(StandardCharsets.UTF_8));
+    public void sendPayload(String message) throws IOException {
+        Objects.requireNonNull(message);
+        sendFrame(FrameType.TEXT, message.getBytes(StandardCharsets.UTF_8));
     }
 
-    public void sendCloseFrame() throws IOException {
-        sendFrame(0x8, new byte[0]);
+    public void close() throws IOException {
+        sendFrame(FrameType.CLOSE, new byte[0]);
         socket.close();
     }
 
-    public void sendControlFrame(int opcode, byte[] payload) throws IOException {
-        sendFrame(opcode, payload);
+    public void sendControlFrame(FrameType frameType, byte[] payload) throws IOException {
+        Objects.requireNonNull(frameType);
+        if (!frameType.isControl()) {
+            throw new IllegalArgumentException("Expected control frame type, but got: " + frameType);
+        }
+        sendFrame(frameType, payload);
     }
 
-    public void sendFrame(int opcode, byte[] payload) throws IOException {
+    public void sendFrame(FrameType frameType, byte[] payload) throws IOException {
+        Objects.requireNonNull(frameType);
+        Objects.requireNonNull(payload);
+
+        byte[] header = buildHeader(frameType, payload.length);
+
         synchronized (sendLock) {
-            output.write(0x80 | (opcode & 0x0F));
-            if (payload.length <= 125) {
-                output.write(payload.length);
-            } else if (payload.length <= 65535) {
-                output.write(126);
-                output.write((payload.length >>> 8) & 0xFF);
-                output.write(payload.length & 0xFF);
-            } else {
-                output.write(127);
-                output.write(ByteBuffer.allocate(Long.BYTES).putLong(payload.length).array());
-            }
+            output.write(header);
             output.write(payload);
             output.flush();
         }
     }
+
 }

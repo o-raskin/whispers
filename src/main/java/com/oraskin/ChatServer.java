@@ -18,7 +18,8 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+
+import static com.oraskin.FrameType.PONG;
 
 public class ChatServer {
 
@@ -61,7 +62,7 @@ public class ChatServer {
             }
 
             writeHandshakeResponse(output, request.header("sec-websocket-key"));
-            session.sendText("CONNECTED:" + userId);
+            session.sendPayload("CONNECTED:" + userId);
             System.out.println("Connected user: " + userId);
 
             while (true) {
@@ -70,18 +71,18 @@ public class ChatServer {
                     break;
                 }
 
-                switch (frame.opcode()) {
-                    case 0x1 -> routeMessage(session, new String(frame.payload(), StandardCharsets.UTF_8));
-                    case 0x8 -> {
-                        session.sendCloseFrame();
+                switch (frame.frameType()) {
+                    case TEXT -> routeMessage(session, new String(frame.payload(), StandardCharsets.UTF_8));
+                    case CLOSE -> {
+                        session.close();
                         return;
                     }
-                    case 0x9 -> session.sendControlFrame(0xA, frame.payload());
-                    case 0xA -> {
+                    case PING -> session.sendControlFrame(PONG, frame.payload());
+                    case PONG -> {
                         // Ignore pong frames.
                     }
                     default -> {
-                        session.sendText("ERROR: unsupported frame type.");
+                        session.sendPayload("ERROR: unsupported frame type.");
                         return;
                     }
                 }
@@ -92,7 +93,7 @@ public class ChatServer {
             System.err.println("Connection failed: " + e.getMessage());
             if (session != null) {
                 try {
-                    session.sendText("ERROR: " + e.getMessage());
+                    session.sendPayload("ERROR: " + e.getMessage());
                 } catch (IOException ignored) {
                     // Connection is already broken.
                 }
@@ -108,24 +109,24 @@ public class ChatServer {
     private void routeMessage(ClientSession sender, String message) throws IOException {
         int separator = message.indexOf(':');
         if (separator <= 0) {
-            sender.sendText("ERROR: use recipientUserId:message");
+            sender.sendPayload("ERROR: use recipientUserId:message");
             return;
         }
 
         String recipientId = message.substring(0, separator).trim();
         String body = message.substring(separator + 1);
         if (recipientId.isEmpty()) {
-            sender.sendText("ERROR: recipient userId is required.");
+            sender.sendPayload("ERROR: recipient userId is required.");
             return;
         }
 
         ClientSession recipient = sessionCache.findSession(recipientId);
         if (recipient == null) {
-            sender.sendText("ERROR: user '" + recipientId + "' is not connected.");
+            sender.sendPayload("ERROR: user '" + recipientId + "' is not connected.");
             return;
         }
 
-        recipient.sendText(sender.userId() + ":" + body);
+        recipient.sendPayload(sender.userId() + ":" + body);
     }
 
     private static HttpRequest readHttpRequest(InputStream input) throws IOException {
@@ -288,7 +289,7 @@ public class ChatServer {
             payload[i] ^= mask[i % 4];
         }
 
-        return new WebSocketFrame(opcode, payload);
+        return new WebSocketFrame(FrameType.fromCode(opcode), payload);
     }
 
     private static int readRequiredByte(InputStream input) throws IOException {

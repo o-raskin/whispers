@@ -1,4 +1,4 @@
 package com.oraskin;
 
-public record WebSocketFrame(int opcode, byte[] payload) {
+public record WebSocketFrame(FrameType frameType, byte[] payload) {
 }
