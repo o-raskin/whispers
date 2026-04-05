@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whispers Test Client</title>
+    <style>
+        :root {
+            font-family: Arial, sans-serif;
+            color: #1f2937;
+            background: #f3f4f6;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 24px;
+        }
+
+        .app {
+            max-width: 720px;
+            margin: 0 auto;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 24px;
+        }
+
+        .row {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        input, button, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #9ca3af;
+            border-radius: 8px;
+            font: inherit;
+        }
+
+        textarea {
+            min-height: 220px;
+            resize: vertical;
+            background: #111827;
+            color: #f9fafb;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .actions button {
+            flex: 1;
+            cursor: pointer;
+        }
+
+        .status {
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<main class="app">
+    <h1>Whispers Test Client</h1>
+
+    <div class="row">
+        <label for="serverUrl">Server URL</label>
+        <input id="serverUrl" value="ws://localhost:8080/connect" />
+    </div>
+
+    <div class="row">
+        <label for="userId">Your user ID</label>
+        <input id="userId" placeholder="alice" />
+    </div>
+
+    <div class="actions">
+        <button id="connectButton" type="button">Connect</button>
+        <button id="disconnectButton" type="button">Disconnect</button>
+    </div>
+
+    <p class="status" id="status">Disconnected</p>
+
+    <div class="row">
+        <label for="recipientId">Recipient user ID</label>
+        <input id="recipientId" placeholder="bob" />
+    </div>
+
+    <div class="row">
+        <label for="messageText">Message</label>
+        <input id="messageText" placeholder="hello there" />
+    </div>
+
+    <button id="sendButton" type="button">Send</button>
+
+    <div class="row" style="margin-top: 16px;">
+        <label for="log">Event log</label>
+        <textarea id="log" readonly></textarea>
+    </div>
+</main>
+
+<script>
+    const serverUrlInput = document.getElementById('serverUrl');
+    const userIdInput = document.getElementById('userId');
+    const recipientIdInput = document.getElementById('recipientId');
+    const messageTextInput = document.getElementById('messageText');
+    const connectButton = document.getElementById('connectButton');
+    const disconnectButton = document.getElementById('disconnectButton');
+    const sendButton = document.getElementById('sendButton');
+    const statusLabel = document.getElementById('status');
+    const logArea = document.getElementById('log');
+
+    let socket = null;
+
+    function appendLog(line) {
+        const timestamp = new Date().toLocaleTimeString();
+        logArea.value += `[${timestamp}] ${line}\n`;
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    function setStatus(text) {
+        statusLabel.textContent = text;
+    }
+
+    function connect() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            appendLog('Already connected.');
+            return;
+        }
+
+        const serverUrl = serverUrlInput.value.trim();
+        const userId = userIdInput.value.trim();
+        if (!serverUrl || !userId) {
+            appendLog('Server URL and user ID are required.');
+            return;
+        }
+
+        const url = `${serverUrl}?userId=${encodeURIComponent(userId)}`;
+        socket = new WebSocket(url);
+        setStatus('Connecting...');
+        appendLog(`Connecting to ${url}`);
+
+        socket.onopen = () => {
+            setStatus(`Connected as ${userId}`);
+            appendLog('WebSocket connected.');
+        };
+
+        socket.onmessage = (event) => {
+            appendLog(`Received: ${event.data}`);
+        };
+
+        socket.onerror = () => {
+            appendLog('WebSocket error.');
+        };
+
+        socket.onclose = () => {
+            setStatus('Disconnected');
+            appendLog('WebSocket closed.');
+            socket = null;
+        };
+    }
+
+    function disconnect() {
+        if (!socket) {
+            appendLog('No active connection.');
+            return;
+        }
+        socket.close();
+    }
+
+    function sendMessage() {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            appendLog('Connect first.');
+            return;
+        }
+
+        const recipientId = recipientIdInput.value.trim();
+        const messageText = messageTextInput.value;
+        if (!recipientId || !messageText) {
+            appendLog('Recipient and message are required.');
+            return;
+        }
+
+        const payload = `${recipientId}:${messageText}`;
+        socket.send(payload);
+        appendLog(`Sent: ${payload}`);
+        messageTextInput.value = '';
+    }
+
+    connectButton.addEventListener('click', connect);
+    disconnectButton.addEventListener('click', disconnect);
+    sendButton.addEventListener('click', sendMessage);
+    messageTextInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            sendMessage();
+        }
+    });
+</script>
+</body>
+</html>
