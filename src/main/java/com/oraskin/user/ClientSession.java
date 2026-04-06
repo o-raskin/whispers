@@ -1,27 +1,26 @@
-package com.oraskin;
+package com.oraskin.user;
+
+import com.oraskin.connection.dto.FrameType;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
-import static com.oraskin.HeaderUtil.buildHeader;
+import static com.oraskin.connection.util.HeaderUtil.buildHeader;
 
 public final class ClientSession {
 
     private final String userId;
     private final Socket socket;
     private final OutputStream output;
-    private final InputStream input;
     private final Object sendLock;
 
-    public ClientSession(String userId, Socket socket, InputStream input, OutputStream output) {
+    public ClientSession(String userId, Socket socket, OutputStream output) {
         this.userId = userId;
         this.socket = socket;
         this.output = output;
-        this.input = input;
         this.sendLock = new Object();
     }
 

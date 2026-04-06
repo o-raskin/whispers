@@ -1,4 +1,6 @@
-package com.oraskin;
+package com.oraskin.connection.util;
+
+import com.oraskin.connection.dto.FrameType;
 
 import java.io.ByteArrayOutputStream;
 

@@ -1,4 +1,4 @@
-package com.oraskin;
+package com.oraskin.connection.dto;
 
 public enum FrameType {
     TEXT(0x1),
