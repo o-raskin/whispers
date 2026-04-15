@@ -75,6 +75,10 @@ public final class ChatService {
         return new MessageDelivery(recipientUserId, storedMessage);
     }
 
+    public String findChatRecipientUserId(String userId, String chatId) {
+        return requireChatParticipant(userId, chatId).otherUserId(userId);
+    }
+
     public PresenceEvent acceptPing(String userId) {
         var user = userStore.ping(userId);
         return new PresenceEvent("presence", user.username(), user.lastPingTime());

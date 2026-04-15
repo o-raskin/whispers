@@ -9,6 +9,9 @@ import com.oraskin.connection.MessageDelivery;
 import com.oraskin.connection.PresenceEvent;
 import com.oraskin.connection.SendMessageCommand;
 import com.oraskin.user.session.ClientSession;
+import com.oraskin.websocket.message.ChatMessageService;
+import com.oraskin.websocket.presence.PresenceService;
+import com.oraskin.websocket.typing.TypingStateService;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -20,18 +23,21 @@ import static com.oraskin.common.websocket.FrameType.PONG;
 
 public final class WebSocketConnectionHandler {
 
-    private final ChatService chatService;
-    private final WebSocketMessageSender webSocketMessageSender;
     private final WebSocketSupport webSocketSupport;
+    private final PresenceService presenceService;
+    private final ChatMessageService chatMessageService;
+    private final TypingStateService typingStateService;
 
     public WebSocketConnectionHandler(
-            ChatService chatService,
-            WebSocketMessageSender webSocketMessageSender,
-            WebSocketSupport webSocketSupport
+            WebSocketSupport webSocketSupport,
+            PresenceService presenceService,
+            ChatMessageService chatMessageService,
+            TypingStateService typingStateService
     ) {
-        this.chatService = chatService;
-        this.webSocketMessageSender = webSocketMessageSender;
         this.webSocketSupport = webSocketSupport;
+        this.presenceService = presenceService;
+        this.chatMessageService = chatMessageService;
+        this.typingStateService = typingStateService;
     }
 
     public void handle(ClientSession session, InputStream input) {
@@ -73,21 +79,13 @@ public final class WebSocketConnectionHandler {
 
     private void handleTextFrame(ClientSession session, String payload) throws IOException {
         WebSocketCommand command = JsonCodec.read(payload, WebSocketCommand.class);
-        if (command.isPing()) {
-            PresenceEvent presenceEvent = chatService.acceptPing(session.userId());
-            webSocketMessageSender.sendToUsers(chatService.findPresenceSubscriberUserIds(session.userId()), presenceEvent);
-            return;
+        switch (command.type()) {
+            case PRESENCE -> presenceService.sendPresence(session);
+            case MESSAGE -> chatMessageService.sendMessage(session, command.chatId(), command.text());
+            case TYPING_START -> typingStateService.startTyping(session, command.chatId());
+            case TYPING_END -> typingStateService.stopTyping(session, command.chatId());
+            default -> session.sendPayload("ERROR: unsupported message payload.");
         }
-        if (command.isMessage()) {
-            MessageDelivery delivery = chatService.sendMessage(
-                    session.userId(),
-                    new SendMessageCommand(command.chatId(), command.text())
-            );
-            webSocketMessageSender.sendToUser(delivery.recipientUserId(), delivery.message());
-            session.sendPayload(JsonCodec.write(delivery.message()));
-            return;
-        }
-        session.sendPayload("ERROR: unsupported message payload.");
     }
 
     private void writeError(ClientSession session, String message) {

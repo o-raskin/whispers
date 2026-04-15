@@ -19,6 +19,9 @@ import com.oraskin.common.websocket.WebSocketSupport;
 import com.oraskin.websocket.SessionWebSocketMessageSender;
 import com.oraskin.websocket.WebSocketMessageSender;
 import com.oraskin.websocket.WebSocketConnectionHandler;
+import com.oraskin.websocket.message.ChatMessageService;
+import com.oraskin.websocket.presence.PresenceService;
+import com.oraskin.websocket.typing.TypingStateService;
 import com.oraskin.user.session.service.SessionService;
 
 import java.io.EOFException;
@@ -40,6 +43,9 @@ public final class ChatServer {
     private final WebSocketConnectionHandler webSocketConnectionHandler;
     private final ControllerResultWriter controllerResultWriter;
     private final SessionService sessionService;
+    private final ChatMessageService chatMessageService;
+    private final TypingStateService typingStateService;
+    private final PresenceService presenceService;
 
     public ChatServer(int port) {
         this.port = port;
@@ -50,6 +56,9 @@ public final class ChatServer {
                 sessionRegistry,
                 userStore);
         WebSocketMessageSender webSocketMessageSender = new SessionWebSocketMessageSender(sessionRegistry);
+        this.chatMessageService = new ChatMessageService(chatService, webSocketMessageSender);
+        this.typingStateService = new TypingStateService(chatService, webSocketMessageSender);
+        this.presenceService = new PresenceService(chatService, webSocketMessageSender);
         this.sessionService = new SessionService(sessionRegistry, userStore);
         ChatsController chatsController = new ChatsController(chatService);
         UserConnectionController userConnectionController = new UserConnectionController(sessionService);
@@ -58,9 +67,10 @@ public final class ChatServer {
         this.webSocketSupport = new WebSocketSupport();
         this.controllerResultWriter = new ControllerResultWriter(httpResponseWriter);
         this.webSocketConnectionHandler = new WebSocketConnectionHandler(
-                chatService,
-                webSocketMessageSender,
-                webSocketSupport
+                webSocketSupport,
+                presenceService,
+                chatMessageService,
+                typingStateService
         );
         this.httpApiRouter = new HttpApiRouter(
                 List.of(
@@ -78,6 +88,7 @@ public final class ChatServer {
             System.out.println("Chat server is listening on ws://localhost:" + port + "/ws/user?userId=<user>");
             while (true) {
                 Socket socket = serverSocket.accept();
+                System.out.println("Accepted: " + socket.getRemoteSocketAddress());
                 Thread.ofVirtual().start(() -> handleConnection(socket));
             }
         }
@@ -117,6 +128,7 @@ public final class ChatServer {
                 controllerResultWriter.writeWebSocket(session, connectResult);
                 webSocketConnectionHandler.handle(session, input);
             } finally {
+                typingStateService.clearUser(session.userId());
                 sessionService.closeSession(session.userId());
                 System.out.println("Disconnected user: " + session.userId());
             }

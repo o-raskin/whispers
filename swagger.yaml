@@ -25,12 +25,15 @@ paths:
         `CONNECTED:{userId}`
 
         Client text frames may send:
-        - chat message JSON matching `SendMessageCommand`
-        - presence ping JSON: `{"type":"ping"}`
+        - chat message JSON: `{"type":"MESSAGE","chatId":"alice__bob","text":"hello there"}`
+        - presence ping JSON: `{"type":"PRESENCE"}`
+        - typing started JSON: `{"type":"TYPING_START","chatId":"alice__bob"}`
+        - typing stopped JSON: `{"type":"TYPING_END","chatId":"alice__bob"}`
 
         Server text frames may send:
         - `MessageRecord` as JSON
         - `PresenceEvent` as JSON
+        - `TypingEvent` as JSON
         - plain text errors starting with `ERROR:`
       parameters:
         - $ref: '#/components/parameters/UserId'
@@ -182,6 +185,27 @@ components:
           type: string
           example: hello there
 
+    WebSocketCommand:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          $ref: '#/components/schemas/WebSocketCommandType'
+        chatId:
+          type: string
+          nullable: true
+          example: alice__bob
+        text:
+          type: string
+          nullable: true
+          example: hello there
+
+    WebSocketCommandType:
+      type: string
+      enum: [PRESENCE, MESSAGE, TYPING_START, TYPING_END]
+      example: MESSAGE
+
     MessageRecord:
       type: object
       required:
@@ -236,6 +260,24 @@ components:
           nullable: true
           description: LocalDateTime formatted as `yyyy-MM-dd'T'HH:mm:ss`
           example: '2026-04-10T12:34:56'
+
+    TypingEvent:
+      type: object
+      required:
+        - type
+        - chatId
+        - username
+      properties:
+        type:
+          type: string
+          enum: [typing:start, typing:stop]
+          example: typing:start
+        chatId:
+          type: string
+          example: alice__bob
+        username:
+          type: string
+          example: alice
 
     ErrorResponse:
       type: object
