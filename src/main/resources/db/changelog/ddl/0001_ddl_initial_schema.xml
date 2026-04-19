@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="0001-create-chats-table" author="oraskin">
+        <createTable tableName="chats">
+            <column name="chat_id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_chats"/>
+            </column>
+            <column name="first_user_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="second_user_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex indexName="idx_chats_first_user" tableName="chats">
+            <column name="first_user_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_chats_second_user" tableName="chats">
+            <column name="second_user_id"/>
+        </createIndex>
+
+        <addUniqueConstraint
+                tableName="chats"
+                columnNames="first_user_id, second_user_id"
+                constraintName="uq_chats_participants"/>
+    </changeSet>
+
+    <changeSet id="0002-create-users-table" author="oraskin">
+        <createTable tableName="users">
+            <column name="username" type="TEXT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_users"/>
+            </column>
+            <column name="first_name" type="TEXT"/>
+            <column name="last_name" type="TEXT"/>
+            <column name="last_ping_time" type="TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="0003-create-messages-table" author="oraskin">
+        <createTable tableName="messages">
+            <column name="id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_messages"/>
+            </column>
+            <column name="chat_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sender_user_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="text" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="messages"
+                baseColumnNames="chat_id"
+                constraintName="fk_messages_chat"
+                referencedTableName="chats"
+                referencedColumnNames="chat_id"
+                onDelete="CASCADE"/>
+
+        <createIndex indexName="idx_messages_chat_id_id" tableName="messages">
+            <column name="chat_id"/>
+            <column name="id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

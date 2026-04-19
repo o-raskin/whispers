@@ -25,10 +25,10 @@ paths:
         `CONNECTED:{userId}`
 
         Client text frames may send:
-        - chat message JSON: `{"type":"MESSAGE","chatId":"alice__bob","text":"hello there"}`
+        - chat message JSON: `{"type":"MESSAGE","chatId":1,"text":"hello there"}`
         - presence ping JSON: `{"type":"PRESENCE"}`
-        - typing started JSON: `{"type":"TYPING_START","chatId":"alice__bob"}`
-        - typing stopped JSON: `{"type":"TYPING_END","chatId":"alice__bob"}`
+        - typing started JSON: `{"type":"TYPING_START","chatId":1}`
+        - typing stopped JSON: `{"type":"TYPING_END","chatId":1}`
 
         Server text frames may send:
         - `MessageRecord` as JSON
@@ -95,8 +95,9 @@ paths:
           in: query
           required: true
           schema:
-            type: string
-          example: alice__bob
+            type: integer
+            format: int64
+          example: 1
       responses:
         '200':
           description: List of messages in the chat
@@ -166,8 +167,9 @@ components:
         - username
       properties:
         chatId:
-          type: string
-          example: alice__bob
+          type: integer
+          format: int64
+          example: 1
         username:
           type: string
           example: bob
@@ -179,8 +181,9 @@ components:
         - text
       properties:
         chatId:
-          type: string
-          example: alice__bob
+          type: integer
+          format: int64
+          example: 1
         text:
           type: string
           example: hello there
@@ -193,9 +196,10 @@ components:
         type:
           $ref: '#/components/schemas/WebSocketCommandType'
         chatId:
-          type: string
+          type: integer
+          format: int64
           nullable: true
-          example: alice__bob
+          example: 1
         text:
           type: string
           nullable: true
@@ -215,8 +219,9 @@ components:
         - timestamp
       properties:
         chatId:
-          type: string
-          example: alice__bob
+          type: integer
+          format: int64
+          example: 1
         senderUserId:
           type: string
           example: alice
@@ -273,8 +278,9 @@ components:
           enum: [typing:start, typing:stop]
           example: typing:start
         chatId:
-          type: string
-          example: alice__bob
+          type: integer
+          format: int64
+          example: 1
         username:
           type: string
           example: alice

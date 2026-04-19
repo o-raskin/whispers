@@ -1,4 +1,4 @@
 package com.oraskin.connection;
 
-public record SendMessageCommand(String chatId, String text) {
+public record SendMessageCommand(Long chatId, String text) {
 }

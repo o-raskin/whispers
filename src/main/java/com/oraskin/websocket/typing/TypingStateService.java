@@ -32,7 +32,7 @@ public final class TypingStateService {
         });
     }
 
-    public void startTyping(ClientSession clientSession, String chatId) {
+    public void startTyping(ClientSession clientSession, long chatId) {
         var recipientUserId = chatService.findChatRecipientUserId(clientSession.userId(), chatId);
         TypingKey key = new TypingKey(chatId, clientSession.userId());
         synchronized (states) {
@@ -48,7 +48,7 @@ public final class TypingStateService {
         webSocketMessageSender.sendToUser(recipientUserId, new TypingEvent("typing:start", chatId, clientSession.userId()));
     }
 
-    public void stopTyping(ClientSession clientSession, String chatId) {
+    public void stopTyping(ClientSession clientSession, long chatId) {
         var recipientUserId = chatService.findChatRecipientUserId(clientSession.userId(), chatId);
         TypingKey key = new TypingKey(chatId, clientSession.userId());
         boolean removed = false;
@@ -113,7 +113,7 @@ public final class TypingStateService {
         }
     }
 
-    private record TypingKey(String chatId, String userId) {
+    private record TypingKey(long chatId, String userId) {
     }
 
     private record TypingState(String recipientUserId, long version, ScheduledFuture<?> future) {

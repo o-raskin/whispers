@@ -20,7 +20,7 @@ public final class MessagesController {
     @RequestMapping(method = "GET")
     public List<MessageRecord> getMessages(
             @RequestParam("userId") String userId,
-            @RequestParam("chatId") String chatId
+            @RequestParam("chatId") long chatId
     ) {
         return chatService.findMessages(userId, chatId);
     }

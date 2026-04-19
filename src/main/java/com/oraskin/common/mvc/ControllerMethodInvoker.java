@@ -86,12 +86,12 @@ public final class ControllerMethodInvoker {
             }
             if (parameter.isAnnotationPresent(RequestParam.class)) {
                 String name = parameter.getAnnotation(RequestParam.class).value();
-                args[i] = request.params().required(name);
+                args[i] = convertSimpleValue(request.params().required(name), parameter.getType());
                 continue;
             }
             if (parameter.isAnnotationPresent(PathVariable.class)) {
                 String name = parameter.getAnnotation(PathVariable.class).value();
-                args[i] = pathVariables.get(name);
+                args[i] = convertSimpleValue(pathVariables.get(name), parameter.getType());
                 continue;
             }
             if (parameter.isAnnotationPresent(RequestBody.class)) {
@@ -102,5 +102,15 @@ public final class ControllerMethodInvoker {
         }
 
         return args;
+    }
+
+    private Object convertSimpleValue(String value, Class<?> targetType) {
+        if (targetType.equals(String.class)) {
+            return value;
+        }
+        if (targetType.equals(long.class) || targetType.equals(Long.class)) {
+            return Long.parseLong(value);
+        }
+        throw new IllegalStateException("Unsupported simple parameter type: " + targetType);
     }
 }

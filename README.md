@@ -3,7 +3,8 @@
 Minimal Java backend for a 1:1 chat application with:
 - plain HTTP endpoints for chat metadata, message history, and presence
 - a WebSocket endpoint for live messaging and presence fan-out
-- in-memory storage for chats, messages, sessions, and user ping timestamps
+- PostgreSQL-backed storage for chats, messages, and user ping timestamps
+- in-memory runtime storage for active sessions and typing state
 
 The project intentionally stays small and framework-light. It uses a custom annotation-based MVC layer instead of Spring, while keeping a similar controller style.
 
@@ -11,8 +12,9 @@ The project intentionally stays small and framework-light. It uses a custom anno
 
 - Java 25
 - Jackson for JSON serialization/deserialization
+- PostgreSQL
+- Liquibase
 - Maven project layout
-- No database
 - No authorization yet
 
 ## Entry Point
@@ -119,7 +121,7 @@ CONNECTED:alice
 
 Client message payload:
 ```json
-{"chatId":"alice__bob","text":"hello"}
+{"chatId":1,"text":"hello"}
 ```
 
 Server may send:
@@ -141,14 +143,11 @@ Main DTOs and records:
 - `PresenceEvent(type, username, lastPingTime)`
 - `User(username, firstName, lastName, lastPingTime)`
 
-Persistence is currently in-memory only:
-- chats keyed by deterministic `chatId`
-- messages stored per chat
-- active sessions stored per user
-- users remembered since app start, with latest accepted ping timestamp
-
-`chatId` format is deterministic and order-independent:
-- `alice__bob`
+Persistence is split by concern:
+- chats keyed by a database-generated sequence id
+- messages and users stored in PostgreSQL
+- active sessions stored in memory
+- typing state stored in memory
 
 ## Running Locally
 
@@ -165,20 +164,60 @@ Then run the application from your IDE or by compiling/running the `com.oraskin.
 
 If Maven is unavailable, compile with the Jackson jars available in the local Maven cache:
 ```bash
-javac -cp "$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.21.2/jackson-databind-2.21.2.jar:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.21.2/jackson-core-2.21.2.jar:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.21/jackson-annotations-2.21.jar:$HOME/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.21.2/jackson-datatype-jsr310-2.21.2.jar" -d out $(find src/main/java -name '*.java')
+javac -cp "$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.21.2/jackson-databind-2.21.2.jar:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.21.2/jackson-core-2.21.2.jar:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.21/jackson-annotations-2.21.jar:$HOME/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.21.2/jackson-datatype-jsr310-2.21.2.jar:$HOME/.m2/repository/org/postgresql/postgresql/42.7.7/postgresql-42.7.7.jar:$HOME/.m2/repository/org/liquibase/liquibase-core/4.33.0/liquibase-core-4.33.0.jar" -d out $(find src/main/java -name '*.java')
 ```
 
 Then run:
 ```bash
-java -cp "out:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.21.2/jackson-databind-2.21.2.jar:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.21.2/jackson-core-2.21.2.jar:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.21/jackson-annotations-2.21.jar:$HOME/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.21.2/jackson-datatype-jsr310-2.21.2.jar" com.oraskin.App
+java -cp "out:src/main/resources:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.21.2/jackson-databind-2.21.2.jar:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.21.2/jackson-core-2.21.2.jar:$HOME/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.21/jackson-annotations-2.21.jar:$HOME/.m2/repository/com/fasterxml/jackson/datatype/jackson-datatype-jsr310/2.21.2/jackson-datatype-jsr310-2.21.2.jar:$HOME/.m2/repository/org/postgresql/postgresql/42.7.7/postgresql-42.7.7.jar:$HOME/.m2/repository/org/liquibase/liquibase-core/4.33.0/liquibase-core-4.33.0.jar" com.oraskin.App
 ```
+
+### With Docker Compose
+
+For local Postgres infrastructure:
+```bash
+docker compose up -d
+```
+
+This starts PostgreSQL on `localhost:5432` with:
+- database: `whispers`
+- username: `whispers`
+- password: `whispers`
+
+The database state is persisted in the named Docker volume `postgres-data`.
+
+The application now uses PostgreSQL at startup. By default it connects to:
+- JDBC URL: `jdbc:postgresql://localhost:5432/whispers`
+- username: `whispers`
+- password: `whispers`
+
+These values can be overridden with:
+- `WHISPERS_DB_URL`
+- `WHISPERS_DB_USER`
+- `WHISPERS_DB_PASSWORD`
+
+Database schema changes are managed by Liquibase and applied automatically on application startup.
+
+Liquibase changelog structure:
+- master file: `src/main/resources/db/changelog/db.changelog-master.xml`
+- DDL changes: `src/main/resources/db/changelog/ddl`
+- DML changes: `src/main/resources/db/changelog/dml`
+
+Recommended file naming:
+- DDL: `0001_ddl_initial_schema.xml`, `0002_ddl_add_user_profile.xml`
+- DML: `1001_dml_seed_reference_data.xml`, `1002_dml_backfill_user_names.xml`
+
+The ordering rule is:
+- keep DDL and DML in separate folders
+- include files explicitly from the master changelog for stable execution order
+- reserve lower sequence ranges for DDL and higher ranges for DML
 
 ## Development Notes
 
 Current project characteristics:
 - controllers are thin and mostly translate transport to service calls
 - business rules live in `ChatService`
-- repositories are storage-oriented and in-memory
+- repositories are storage-oriented, with PostgreSQL for durable data
 - DTOs are mostly immutable records
 - the custom MVC layer is intentionally small and reflection-based
 
@@ -192,7 +231,7 @@ Good places for future extension:
 ## Limitations
 
 Current limitations worth knowing:
-- all state is lost on restart
+- active sessions and typing state are still lost on restart
 - only 1:1 chats are supported
 - only one live session per user is supported
 - no auth, tenanting, or permissions beyond chat participation checks

@@ -41,7 +41,7 @@ public final class ChatService {
         return userStore.findUsers(usernames);
     }
 
-    public List<MessageRecord> findMessages(String userId, String chatId) {
+    public List<MessageRecord> findMessages(String userId, long chatId) {
         ChatRecord chat = requireChatParticipant(userId, chatId);
         return chatRepository.findMessages(chat.chatId());
     }
@@ -60,9 +60,9 @@ public final class ChatService {
     }
 
     public MessageDelivery sendMessage(String senderUserId, SendMessageCommand command) {
-        if (command == null || command.chatId() == null || command.chatId().isBlank()
+        if (command == null || command.chatId() == null
                 || command.text() == null || command.text().isBlank()) {
-            throw new ChatException(HttpStatus.BAD_REQUEST, "use {\"chatId\":\"...\",\"text\":\"...\"}");
+            throw new ChatException(HttpStatus.BAD_REQUEST, "use {\"chatId\":123,\"text\":\"...\"}");
         }
 
         ChatRecord chat = requireChatParticipant(senderUserId, command.chatId());
@@ -75,7 +75,7 @@ public final class ChatService {
         return new MessageDelivery(recipientUserId, storedMessage);
     }
 
-    public String findChatRecipientUserId(String userId, String chatId) {
+    public String findChatRecipientUserId(String userId, long chatId) {
         return requireChatParticipant(userId, chatId).otherUserId(userId);
     }
 
@@ -91,7 +91,7 @@ public final class ChatService {
                 .toList();
     }
 
-    private ChatRecord requireChatParticipant(String userId, String chatId) {
+    private ChatRecord requireChatParticipant(String userId, long chatId) {
         ChatRecord chat = chatRepository.findChat(chatId);
         if (chat == null || !chat.hasParticipant(userId)) {
             throw new ChatException(HttpStatus.NOT_FOUND, "Chat not found");

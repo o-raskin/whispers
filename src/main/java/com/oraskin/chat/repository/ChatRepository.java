@@ -9,11 +9,11 @@ public interface ChatRepository {
 
     ChatRecord createChat(String firstUserId, String secondUserId);
 
-    ChatRecord findChat(String chatId);
+    ChatRecord findChat(long chatId);
 
     List<ChatRecord> findChatsForUser(String userId);
 
-    MessageRecord appendMessage(String chatId, String senderUserId, String text);
+    MessageRecord appendMessage(long chatId, String senderUserId, String text);
 
-    List<MessageRecord> findMessages(String chatId);
+    List<MessageRecord> findMessages(long chatId);
 }

@@ -1,10 +1,13 @@
 package com.oraskin;
 
 import com.oraskin.chat.service.ChatService;
-import com.oraskin.chat.repository.InMemoryChatStore;
+import com.oraskin.chat.repository.PostgresChatRepository;
 import com.oraskin.common.http.HttpRequest;
 import com.oraskin.common.http.HttpRequestReader;
-import com.oraskin.user.data.persistence.InMemoryUserStore;
+import com.oraskin.common.postgres.LiquibaseMigrationRunner;
+import com.oraskin.common.postgres.PostgresConfig;
+import com.oraskin.common.postgres.PostgresConnectionFactory;
+import com.oraskin.user.data.persistence.PostgresUserStore;
 import com.oraskin.user.session.persistence.InMemorySessionRegistry;
 import com.oraskin.user.session.ClientSession;
 import com.oraskin.common.mvc.ControllerResult;
@@ -49,10 +52,16 @@ public final class ChatServer {
 
     public ChatServer(int port) {
         this.port = port;
+        Clock clock = Clock.systemUTC();
         InMemorySessionRegistry sessionRegistry = new InMemorySessionRegistry();
-        InMemoryUserStore userStore = new InMemoryUserStore(Clock.systemUTC());
+        PostgresConfig postgresConfig = PostgresConfig.fromEnvironment();
+        PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(postgresConfig);
+        LiquibaseMigrationRunner migrationRunner = new LiquibaseMigrationRunner(connectionFactory);
+        migrationRunner.runMigrations();
+
+        PostgresUserStore userStore = new PostgresUserStore(connectionFactory, clock);
         ChatService chatService = new ChatService(
-                new InMemoryChatStore(Clock.systemUTC()),
+                new PostgresChatRepository(connectionFactory, clock),
                 sessionRegistry,
                 userStore);
         WebSocketMessageSender webSocketMessageSender = new SessionWebSocketMessageSender(sessionRegistry);

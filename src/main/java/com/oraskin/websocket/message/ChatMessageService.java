@@ -20,7 +20,7 @@ public class ChatMessageService {
         this.webSocketMessageSender = webSocketMessageSender;
     }
 
-    public void sendMessage(ClientSession clientSession, String chatId, String text) throws IOException {
+    public void sendMessage(ClientSession clientSession, long chatId, String text) throws IOException {
         MessageDelivery delivery = chatService.sendMessage(
                 clientSession.userId(),
                 new SendMessageCommand(chatId, text)
