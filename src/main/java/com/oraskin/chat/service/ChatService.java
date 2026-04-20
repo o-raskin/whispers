@@ -68,9 +68,6 @@ public final class ChatService {
         if (userId.equals(targetUser.userId())) {
             throw new ChatException(HttpStatus.BAD_REQUEST, "Cannot create chat with the same user");
         }
-        if (!sessionRegistry.isConnected(targetUser.userId())) {
-            throw new ChatException(HttpStatus.CONFLICT, "Target user is not connected");
-        }
 
         ChatRecord chat = chatRepository.createChat(userId, targetUser.userId());
         return new ChatSummary(
@@ -87,9 +84,6 @@ public final class ChatService {
 
         ChatRecord chat = requireChatParticipant(senderUserId, command.chatId());
         String recipientUserId = chat.otherUserId(senderUserId);
-        if (!sessionRegistry.isConnected(recipientUserId)) {
-            throw new ChatException(HttpStatus.CONFLICT, "Target user is not connected");
-        }
 
         MessageRecord storedMessage = chatRepository.appendMessage(chat.chatId(), senderUserId, command.text());
         return new MessageDelivery(recipientUserId, mapExternalMessage(storedMessage));
