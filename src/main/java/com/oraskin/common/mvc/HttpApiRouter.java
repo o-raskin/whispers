@@ -1,10 +1,12 @@
 package com.oraskin.common.mvc;
 
+import com.oraskin.common.auth.RequestAuthenticationService;
 import com.oraskin.chat.service.ChatException;
 import com.oraskin.common.http.ErrorResponse;
 import com.oraskin.common.http.HttpRequest;
 import com.oraskin.common.http.HttpResponseWriter;
 import com.oraskin.common.http.HttpStatus;
+import com.oraskin.common.mvc.annotation.PublicEndpoint;
 import com.oraskin.common.mvc.annotation.RequestMapping;
 import com.oraskin.common.mvc.annotation.RestController;
 
@@ -22,16 +24,26 @@ public final class HttpApiRouter {
     private final ControllerMethodInvoker controllerMethodInvoker;
     private final ControllerResultWriter controllerResultWriter;
     private final HttpResponseWriter httpResponseWriter;
+    private final RequestAuthenticationService requestAuthenticationService;
 
-    public HttpApiRouter(List<Object> controllers, HttpResponseWriter httpResponseWriter) {
+    public HttpApiRouter(
+            List<Object> controllers,
+            HttpResponseWriter httpResponseWriter,
+            RequestAuthenticationService requestAuthenticationService
+    ) {
         this.controllerMethods = scanControllers(controllers);
         this.controllerMethodInvoker = new ControllerMethodInvoker();
         this.controllerResultWriter = new ControllerResultWriter(httpResponseWriter);
         this.httpResponseWriter = httpResponseWriter;
+        this.requestAuthenticationService = requestAuthenticationService;
     }
 
     public void route(HttpRequest request, OutputStream output) throws IOException {
         try {
+            if ("OPTIONS".equals(request.method())) {
+                httpResponseWriter.writeEmpty(output, HttpStatus.OK, Map.of());
+                return;
+            }
             ControllerResult result = invoke(request, null, output);
             if (result != null) {
                 controllerResultWriter.writeHttp(output, result);
@@ -52,7 +64,15 @@ public final class HttpApiRouter {
         if (controllerMethod == null) {
             return null;
         }
-        return controllerMethodInvoker.invoke(controllerMethod, request, null, request.body(), socket, output);
+        HttpRequest authenticatedRequest = authenticateRequest(request, controllerMethod);
+        return controllerMethodInvoker.invoke(controllerMethod, authenticatedRequest, null, authenticatedRequest.body(), socket, output);
+    }
+
+    private HttpRequest authenticateRequest(HttpRequest request, ControllerMethod controllerMethod) {
+        if (controllerMethod.publicEndpoint()) {
+            return requestAuthenticationService.authenticateIfPresent(request);
+        }
+        return requestAuthenticationService.authenticateRequired(request);
     }
 
     private ControllerMethod findControllerMethod(HttpRequest request) {
@@ -64,7 +84,8 @@ public final class HttpApiRouter {
                         controllerMethod.method(),
                         controllerMethod.requestMethod(),
                         controllerMethod.pathPattern(),
-                        pathVariables
+                        pathVariables,
+                        controllerMethod.publicEndpoint()
                 );
             }
         }
@@ -90,7 +111,8 @@ public final class HttpApiRouter {
                         method,
                         mapping.method(),
                         pathPattern,
-                        Map.of()
+                        Map.of(),
+                        method.isAnnotationPresent(PublicEndpoint.class)
                 ));
             }
         }

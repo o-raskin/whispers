@@ -1,5 +1,6 @@
 package com.oraskin.common.mvc;
 
+import com.oraskin.common.auth.AuthenticatedUser;
 import com.oraskin.common.http.HttpRequest;
 import com.oraskin.common.http.QueryParams;
 import com.oraskin.common.json.JsonCodec;
@@ -37,6 +38,9 @@ public final class ControllerMethodInvoker {
         );
         try {
             Object value = controllerMethod.method().invoke(controllerMethod.controller(), args);
+            if (value instanceof ControllerResult controllerResult) {
+                return controllerResult;
+            }
             if (value == null) {
                 return ControllerResult.empty();
             }
@@ -74,6 +78,10 @@ public final class ControllerMethodInvoker {
             }
             if (parameter.getType().equals(ClientSession.class)) {
                 args[i] = session;
+                continue;
+            }
+            if (parameter.getType().equals(AuthenticatedUser.class)) {
+                args[i] = request.authenticatedUser();
                 continue;
             }
             if (parameter.getType().equals(Socket.class)) {

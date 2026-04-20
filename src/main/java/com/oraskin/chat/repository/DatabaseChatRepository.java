@@ -17,12 +17,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public final class PostgresChatRepository implements ChatRepository {
+public final class DatabaseChatRepository implements ChatRepository {
 
     private final PostgresConnectionFactory connectionFactory;
     private final Clock clock;
 
-    public PostgresChatRepository(PostgresConnectionFactory connectionFactory, Clock clock) {
+    public DatabaseChatRepository(PostgresConnectionFactory connectionFactory, Clock clock) {
         this.connectionFactory = Objects.requireNonNull(connectionFactory);
         this.clock = Objects.requireNonNull(clock);
     }

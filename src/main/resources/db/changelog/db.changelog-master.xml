@@ -7,5 +7,7 @@
             https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
     <include file="db/changelog/ddl/0001_ddl_initial_schema.xml"/>
+    <include file="db/changelog/ddl/0002_ddl_auth_schema.xml"/>
+    <include file="db/changelog/ddl/0003_ddl_oidc_mvp_refactor.xml"/>
 
 </databaseChangeLog>

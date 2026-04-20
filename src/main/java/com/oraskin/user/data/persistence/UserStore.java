@@ -7,11 +7,15 @@ import java.util.List;
 
 public interface UserStore {
 
-    void remember(String username);
+    User ping(String userId);
 
-    User ping(String username);
+    User findUser(String userId);
 
-    User findUser(String username);
+    List<User> findUsers(Collection<String> userIds);
 
-    List<User> findUsers(Collection<String> usernames);
+    User findByUsername(String username);
+
+    String createUser(String username, String firstName, String lastName);
+
+    void updateUser(String userId, String username, String firstName, String lastName);
 }

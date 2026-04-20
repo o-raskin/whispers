@@ -7,6 +7,7 @@ public final class UserMapper {
 
     public User toDomain(UserData userData) {
         return new User(
+                userData.getUserId(),
                 userData.getUsername(),
                 userData.getFirstName(),
                 userData.getLastName(),

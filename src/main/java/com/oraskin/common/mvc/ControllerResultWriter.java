@@ -17,7 +17,7 @@ public final class ControllerResultWriter {
     }
 
     public void writeHttp(OutputStream output, ControllerResult result) throws IOException {
-        httpResponseWriter.writeJson(output, HttpStatus.OK, result.body());
+        httpResponseWriter.writeJson(output, result.status(), result.body(), result.headers());
     }
 
     public void writeWebSocket(ClientSession currentSession, ControllerResult result) throws IOException {

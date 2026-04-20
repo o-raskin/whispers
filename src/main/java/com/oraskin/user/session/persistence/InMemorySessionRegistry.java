@@ -14,7 +14,7 @@ public final class InMemorySessionRegistry implements SessionRegistry {
     }
 
     @Override
-    public boolean register(String userId, ClientSession session) {
+    public boolean createUserSession(String userId, ClientSession session) {
         return clients.putIfAbsent(userId, session) == null;
     }
 

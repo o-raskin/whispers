@@ -16,4 +16,5 @@ public interface ChatRepository {
     MessageRecord appendMessage(long chatId, String senderUserId, String text);
 
     List<MessageRecord> findMessages(long chatId);
+
 }

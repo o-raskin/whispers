@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="0004-create-user-identities-table" author="oraskin">
+        <createTable tableName="user_identities">
+            <column name="provider" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_subject" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email_verified" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="username" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="TEXT"/>
+            <column name="first_name" type="TEXT"/>
+            <column name="last_name" type="TEXT"/>
+            <column name="picture_url" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_login_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey
+                tableName="user_identities"
+                columnNames="provider, provider_subject"
+                constraintName="pk_user_identities"/>
+
+        <addUniqueConstraint
+                tableName="user_identities"
+                columnNames="username"
+                constraintName="uq_user_identities_username"/>
+    </changeSet>
+
+    <changeSet id="0005-create-auth-access-tokens-table" author="oraskin">
+        <createTable tableName="auth_access_tokens">
+            <column name="token_hash" type="TEXT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_auth_access_tokens"/>
+            </column>
+            <column name="provider" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_subject" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="issued_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_used_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="revoked_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </createTable>
+
+        <createIndex indexName="idx_auth_access_tokens_subject" tableName="auth_access_tokens">
+            <column name="provider"/>
+            <column name="provider_subject"/>
+        </createIndex>
+
+        <createIndex indexName="idx_auth_access_tokens_expires_at" tableName="auth_access_tokens">
+            <column name="expires_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

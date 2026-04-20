@@ -1,4 +1,8 @@
 package com.oraskin.chat.value;
 
-public record ChatSummary(long chatId, String username) {
+public record ChatSummary(
+        long chatId,
+        String username,
+        String type
+) {
 }

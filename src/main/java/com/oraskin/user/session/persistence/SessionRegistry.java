@@ -4,7 +4,7 @@ import com.oraskin.user.session.ClientSession;
 
 public interface SessionRegistry {
 
-    boolean register(String userId, ClientSession session);
+    boolean createUserSession(String userId, ClientSession session);
 
     ClientSession findSession(String userId);
 

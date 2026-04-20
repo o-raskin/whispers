@@ -1,13 +1,10 @@
 package com.oraskin.websocket;
 
 import com.oraskin.chat.service.ChatException;
-import com.oraskin.chat.service.ChatService;
+import com.oraskin.common.http.HttpStatus;
 import com.oraskin.common.json.JsonCodec;
 import com.oraskin.common.websocket.WebSocketFrame;
 import com.oraskin.common.websocket.WebSocketSupport;
-import com.oraskin.connection.MessageDelivery;
-import com.oraskin.connection.PresenceEvent;
-import com.oraskin.connection.SendMessageCommand;
 import com.oraskin.user.session.ClientSession;
 import com.oraskin.websocket.message.ChatMessageService;
 import com.oraskin.websocket.presence.PresenceService;
@@ -45,8 +42,6 @@ public final class WebSocketConnectionHandler {
             processFrames(session, input);
         } catch (SocketException | EOFException ignored) {
             // Client disconnected.
-        } catch (ChatException e) {
-            writeError(session, e.getMessage());
         } catch (Exception e) {
             writeError(session, e.getMessage());
         }
@@ -60,7 +55,7 @@ public final class WebSocketConnectionHandler {
             }
 
             switch (frame.frameType()) {
-                case TEXT -> handleTextFrame(session, new String(frame.payload(), StandardCharsets.UTF_8));
+                case TEXT -> handleTextFrameSafely(session, new String(frame.payload(), StandardCharsets.UTF_8));
                 case CLOSE -> {
                     session.close();
                     return;
@@ -77,15 +72,32 @@ public final class WebSocketConnectionHandler {
         }
     }
 
+    private void handleTextFrameSafely(ClientSession session, String payload) {
+        try {
+            handleTextFrame(session, payload);
+        } catch (ChatException e) {
+            writeError(session, e.getMessage());
+        } catch (Exception e) {
+            writeError(session, e.getMessage());
+        }
+    }
+
     private void handleTextFrame(ClientSession session, String payload) throws IOException {
         WebSocketCommand command = JsonCodec.read(payload, WebSocketCommand.class);
         switch (command.type()) {
             case PRESENCE -> presenceService.sendPresence(session);
-            case MESSAGE -> chatMessageService.sendMessage(session, command.chatId(), command.text());
-            case TYPING_START -> typingStateService.startTyping(session, command.chatId());
-            case TYPING_END -> typingStateService.stopTyping(session, command.chatId());
+            case MESSAGE -> chatMessageService.sendMessage(session, requireChatId(command), command.text());
+            case TYPING_START -> typingStateService.startTyping(session, requireChatId(command));
+            case TYPING_END -> typingStateService.stopTyping(session, requireChatId(command));
             default -> session.sendPayload("ERROR: unsupported message payload.");
         }
+    }
+
+    private long requireChatId(WebSocketCommand command) {
+        if (command.chatId() == null) {
+            throw new ChatException(HttpStatus.BAD_REQUEST, "chatId is required");
+        }
+        return command.chatId();
     }
 
     private void writeError(ClientSession session, String message) {

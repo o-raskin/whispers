@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="0006-add-internal-user-id" author="oraskin">
+        <addColumn tableName="users">
+            <column name="user_id" type="TEXT"/>
+        </addColumn>
+
+        <sql>
+            UPDATE users
+            SET user_id = CONCAT('usr_', md5(username))
+            WHERE user_id IS NULL;
+        </sql>
+
+        <addNotNullConstraint tableName="users" columnName="user_id" columnDataType="TEXT"/>
+        <addUniqueConstraint tableName="users" columnNames="user_id" constraintName="uq_users_user_id"/>
+    </changeSet>
+
+    <changeSet id="0007-migrate-chat-identifiers-to-user-id" author="oraskin">
+        <sql>
+            UPDATE chats chat
+            SET first_user_id = users.user_id
+            FROM users
+            WHERE chat.first_user_id = users.username;
+        </sql>
+        <sql>
+            UPDATE chats chat
+            SET second_user_id = users.user_id
+            FROM users
+            WHERE chat.second_user_id = users.username;
+        </sql>
+        <sql>
+            UPDATE messages message
+            SET sender_user_id = users.user_id
+            FROM users
+            WHERE message.sender_user_id = users.username;
+        </sql>
+    </changeSet>
+
+    <changeSet id="0008-create-external-identities-table" author="oraskin">
+        <createTable tableName="auth_external_identities">
+            <column name="provider" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_subject" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="picture_url" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_login_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey tableName="auth_external_identities" columnNames="provider, provider_subject"
+                       constraintName="pk_auth_external_identities"/>
+        <addUniqueConstraint tableName="auth_external_identities" columnNames="user_id, provider"
+                             constraintName="uq_auth_external_identities_user_provider"/>
+    </changeSet>
+
+    <changeSet id="0009-alter-auth-access-tokens-add-user-id" author="oraskin">
+        <addColumn tableName="auth_access_tokens">
+            <column name="user_id" type="TEXT"/>
+        </addColumn>
+        <createIndex indexName="idx_auth_access_tokens_user_id" tableName="auth_access_tokens">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="0010-create-refresh-tokens-table" author="oraskin">
+        <createTable tableName="auth_refresh_tokens">
+            <column name="session_id" type="TEXT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_auth_refresh_tokens"/>
+            </column>
+            <column name="token_hash" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_subject" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="issued_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revoked_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </createTable>
+        <addUniqueConstraint tableName="auth_refresh_tokens" columnNames="token_hash"
+                             constraintName="uq_auth_refresh_tokens_token_hash"/>
+        <createIndex indexName="idx_auth_refresh_tokens_user_id" tableName="auth_refresh_tokens">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

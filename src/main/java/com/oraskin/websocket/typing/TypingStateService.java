@@ -45,7 +45,10 @@ public final class TypingStateService {
             );
             states.put(key, new TypingState(recipientUserId, version, future));
         }
-        webSocketMessageSender.sendToUser(recipientUserId, new TypingEvent("typing:start", chatId, clientSession.userId()));
+        webSocketMessageSender.sendToUser(
+                recipientUserId,
+                new TypingEvent("typing:start", chatId, chatService.usernameForUserId(clientSession.userId()))
+        );
     }
 
     public void stopTyping(ClientSession clientSession, long chatId) {
@@ -60,7 +63,10 @@ public final class TypingStateService {
             }
         }
         if (removed) {
-            webSocketMessageSender.sendToUser(recipientUserId, new TypingEvent("typing:stop", chatId, clientSession.userId()));
+            webSocketMessageSender.sendToUser(
+                    recipientUserId,
+                    new TypingEvent("typing:stop", chatId, chatService.usernameForUserId(clientSession.userId()))
+            );
         }
     }
 
@@ -79,7 +85,7 @@ public final class TypingStateService {
         for (Map.Entry<TypingKey, TypingState> entry : removedStates.entrySet()) {
             webSocketMessageSender.sendToUser(
                     entry.getValue().recipientUserId(),
-                    new TypingEvent("typing:stop", entry.getKey().chatId(), entry.getKey().userId())
+                    new TypingEvent("typing:stop", entry.getKey().chatId(), chatService.usernameForUserId(entry.getKey().userId()))
             );
         }
     }
@@ -96,7 +102,7 @@ public final class TypingStateService {
         if (expired) {
             webSocketMessageSender.sendToUser(
                     recipientUserId,
-                    new TypingEvent("typing:stop", key.chatId(), key.userId())
+                    new TypingEvent("typing:stop", key.chatId(), chatService.usernameForUserId(key.userId()))
             );
         }
     }

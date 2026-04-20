@@ -1,13 +1,29 @@
 package com.oraskin;
 
+import com.oraskin.auth.api.AuthController;
+import com.oraskin.auth.config.AuthConfig;
+import com.oraskin.auth.config.FrontendConfig;
+import com.oraskin.auth.config.OidcProviderConfig;
+import com.oraskin.auth.oidc.OidcAuthenticationService;
+import com.oraskin.auth.persistence.PostgresAccessTokenStore;
+import com.oraskin.auth.persistence.PostgresAuthIdentityStore;
+import com.oraskin.auth.persistence.PostgresRefreshTokenStore;
+import com.oraskin.auth.service.AccessTokenService;
+import com.oraskin.auth.service.AuthService;
+import com.oraskin.auth.service.IdentityProvisioningService;
+import com.oraskin.auth.service.RefreshTokenService;
+import com.oraskin.chat.repository.ChatRepository;
 import com.oraskin.chat.service.ChatService;
-import com.oraskin.chat.repository.PostgresChatRepository;
+import com.oraskin.chat.repository.DatabaseChatRepository;
+import com.oraskin.common.auth.RequestAuthenticationService;
 import com.oraskin.common.http.HttpRequest;
 import com.oraskin.common.http.HttpRequestReader;
 import com.oraskin.common.postgres.LiquibaseMigrationRunner;
 import com.oraskin.common.postgres.PostgresConfig;
 import com.oraskin.common.postgres.PostgresConnectionFactory;
-import com.oraskin.user.data.persistence.PostgresUserStore;
+import com.oraskin.user.data.persistence.DatabaseUserStore;
+import com.oraskin.user.data.persistence.UserStore;
+import com.oraskin.user.profile.UserProfileService;
 import com.oraskin.user.session.persistence.InMemorySessionRegistry;
 import com.oraskin.user.session.ClientSession;
 import com.oraskin.common.mvc.ControllerResult;
@@ -46,33 +62,78 @@ public final class ChatServer {
     private final WebSocketConnectionHandler webSocketConnectionHandler;
     private final ControllerResultWriter controllerResultWriter;
     private final SessionService sessionService;
+    private final RequestAuthenticationService requestAuthenticationService;
     private final ChatMessageService chatMessageService;
     private final TypingStateService typingStateService;
     private final PresenceService presenceService;
 
     public ChatServer(int port) {
         this.port = port;
+
         Clock clock = Clock.systemUTC();
-        InMemorySessionRegistry sessionRegistry = new InMemorySessionRegistry();
+
         PostgresConfig postgresConfig = PostgresConfig.fromEnvironment();
         PostgresConnectionFactory connectionFactory = new PostgresConnectionFactory(postgresConfig);
         LiquibaseMigrationRunner migrationRunner = new LiquibaseMigrationRunner(connectionFactory);
         migrationRunner.runMigrations();
 
-        PostgresUserStore userStore = new PostgresUserStore(connectionFactory, clock);
+        UserStore userStore = new DatabaseUserStore(connectionFactory, clock);
+        ChatRepository chatRepository = new DatabaseChatRepository(connectionFactory, clock);
+
+        InMemorySessionRegistry sessionRegistry = new InMemorySessionRegistry();
+
+        FrontendConfig frontendConfig = FrontendConfig.fromEnvironment();
+
+        OidcProviderConfig googleOidcProviderConfig = OidcProviderConfig.google(frontendConfig);
+        AuthConfig authConfig = AuthConfig.fromEnvironment(frontendConfig);
+        PostgresAuthIdentityStore authIdentityStore = new PostgresAuthIdentityStore(connectionFactory);
+        AccessTokenService accessTokenService = new AccessTokenService(
+                new PostgresAccessTokenStore(connectionFactory),
+                authConfig,
+                clock
+        );
+        RefreshTokenService refreshTokenService = new RefreshTokenService(
+                new PostgresRefreshTokenStore(connectionFactory),
+                accessTokenService,
+                authConfig,
+                clock
+        );
+        this.requestAuthenticationService = new RequestAuthenticationService(accessTokenService);
+        AuthService authService = new AuthService(
+                List.of(
+                        new OidcAuthenticationService(
+                                googleOidcProviderConfig,
+                                clock
+                        )
+                ),
+                new IdentityProvisioningService(
+                        authIdentityStore,
+                        userStore
+                ),
+                authIdentityStore,
+                accessTokenService,
+                refreshTokenService,
+                authConfig,
+                userStore,
+                frontendConfig.secureCookies()
+        );
+
         ChatService chatService = new ChatService(
-                new PostgresChatRepository(connectionFactory, clock),
+                chatRepository,
                 sessionRegistry,
-                userStore);
+                userStore
+        );
+        UserProfileService userProfileService = new UserProfileService(userStore, authIdentityStore);
         WebSocketMessageSender webSocketMessageSender = new SessionWebSocketMessageSender(sessionRegistry);
+
         this.chatMessageService = new ChatMessageService(chatService, webSocketMessageSender);
         this.typingStateService = new TypingStateService(chatService, webSocketMessageSender);
         this.presenceService = new PresenceService(chatService, webSocketMessageSender);
-        this.sessionService = new SessionService(sessionRegistry, userStore);
+        this.sessionService = new SessionService(sessionRegistry);
         ChatsController chatsController = new ChatsController(chatService);
         UserConnectionController userConnectionController = new UserConnectionController(sessionService);
         this.httpRequestReader = new HttpRequestReader();
-        HttpResponseWriter httpResponseWriter = new HttpResponseWriter();
+        HttpResponseWriter httpResponseWriter = new HttpResponseWriter(frontendConfig);
         this.webSocketSupport = new WebSocketSupport();
         this.controllerResultWriter = new ControllerResultWriter(httpResponseWriter);
         this.webSocketConnectionHandler = new WebSocketConnectionHandler(
@@ -83,18 +144,20 @@ public final class ChatServer {
         );
         this.httpApiRouter = new HttpApiRouter(
                 List.of(
+                        new AuthController(authService),
                         userConnectionController,
                         chatsController,
                         new MessagesController(chatService),
-                        new UsersController(chatService)
+                        new UsersController(chatService, userProfileService)
                 ),
-                httpResponseWriter
+                httpResponseWriter,
+                requestAuthenticationService
         );
     }
 
     public void start() throws IOException {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("Chat server is listening on ws://localhost:" + port + "/ws/user?userId=<user>");
+            System.out.println("Chat server is listening on port: " + port);
             while (true) {
                 Socket socket = serverSocket.accept();
                 System.out.println("Accepted: " + socket.getRemoteSocketAddress());
@@ -128,12 +191,17 @@ public final class ChatServer {
             if (connectResult == null) {
                 throw new IOException("WebSocket connect route not found.");
             }
-            ClientSession session = sessionService.findSession(request.params().required("userId"));
+            HttpRequest authenticatedRequest = requestAuthenticationService.authenticateRequired(request);
+            ClientSession session = sessionService.findSession(authenticatedRequest.authenticatedUser().userId());
             if (session == null) {
                 throw new IOException("WebSocket session was not opened by connect controller.");
             }
             try {
-                webSocketSupport.writeHandshakeResponse(output, request.header("sec-websocket-key"));
+                webSocketSupport.writeHandshakeResponse(
+                        output,
+                        request.header("sec-websocket-key"),
+                        requestAuthenticationService.resolveWebSocketSubprotocol(request)
+                );
                 controllerResultWriter.writeWebSocket(session, connectResult);
                 webSocketConnectionHandler.handle(session, input);
             } finally {

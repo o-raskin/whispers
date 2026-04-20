@@ -3,7 +3,10 @@ package com.oraskin.common.http;
 public enum HttpStatus {
     SWITCHING_PROTOCOLS(101, "Switching Protocols"),
     OK(200, "OK"),
+    CREATED(201, "Created"),
     BAD_REQUEST(400, "Bad Request"),
+    UNAUTHORIZED(401, "Unauthorized"),
+    FORBIDDEN(403, "Forbidden"),
     NOT_FOUND(404, "Not Found"),
     CONFLICT(409, "Conflict");
 

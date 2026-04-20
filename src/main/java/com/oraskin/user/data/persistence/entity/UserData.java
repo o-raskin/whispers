@@ -6,16 +6,22 @@ import java.util.Objects;
 
 public class UserData {
 
+    private final String userId;
     private final String username;
     private final String firstName;
     private final String lastName;
     private final LocalDateTime lastPingTime;
 
-    public UserData(String username, String firstName, String lastName, LocalDateTime lastPingTime) {
+    public UserData(String userId, String username, String firstName, String lastName, LocalDateTime lastPingTime) {
+        this.userId = userId;
         this.username = username;
         this.firstName = firstName;
         this.lastName = lastName;
         this.lastPingTime = lastPingTime;
+    }
+
+    public String getUserId() {
+        return userId;
     }
 
     public String getUsername() {
@@ -37,11 +43,11 @@ public class UserData {
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof UserData userData)) return false;
-        return Objects.equals(username, userData.username);
+        return Objects.equals(userId, userData.userId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(username);
+        return Objects.hashCode(userId);
     }
 }

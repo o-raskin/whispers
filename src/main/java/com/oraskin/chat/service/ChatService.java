@@ -1,13 +1,13 @@
 package com.oraskin.chat.service;
 
-import com.oraskin.chat.repository.entity.ChatRecord;
 import com.oraskin.chat.repository.ChatRepository;
-import com.oraskin.chat.value.ChatSummary;
-import com.oraskin.connection.MessageDelivery;
+import com.oraskin.chat.repository.entity.ChatRecord;
 import com.oraskin.chat.repository.entity.MessageRecord;
+import com.oraskin.chat.value.ChatSummary;
+import com.oraskin.common.http.HttpStatus;
+import com.oraskin.connection.MessageDelivery;
 import com.oraskin.connection.PresenceEvent;
 import com.oraskin.connection.SendMessageCommand;
-import com.oraskin.common.http.HttpStatus;
 import com.oraskin.user.data.domain.User;
 import com.oraskin.user.data.persistence.UserStore;
 import com.oraskin.user.session.persistence.SessionRegistry;
@@ -21,7 +21,11 @@ public final class ChatService {
     private final SessionRegistry sessionRegistry;
     private final UserStore userStore;
 
-    public ChatService(ChatRepository chatRepository, SessionRegistry sessionRegistry, UserStore userStore) {
+    public ChatService(
+            ChatRepository chatRepository,
+            SessionRegistry sessionRegistry,
+            UserStore userStore
+    ) {
         this.chatRepository = Objects.requireNonNull(chatRepository);
         this.sessionRegistry = Objects.requireNonNull(sessionRegistry);
         this.userStore = Objects.requireNonNull(userStore);
@@ -29,50 +33,66 @@ public final class ChatService {
 
     public List<ChatSummary> findChatsForUser(String userId) {
         return chatRepository.findChatsForUser(userId).stream()
-                .map(chat -> new ChatSummary(chat.chatId(), chat.otherUserId(userId)))
+                .map(chat -> {
+                    User other = resolveUser(chat.otherUserId(userId));
+                    String username = other == null ? chat.otherUserId(userId) : other.username();
+                    return new ChatSummary(
+                            chat.chatId(),
+                            username,
+                            "DIRECT"
+                    );
+                })
                 .toList();
     }
 
     public List<User> findUsersForUser(String userId) {
-        List<String> usernames = chatRepository.findChatsForUser(userId).stream()
+        List<String> userIds = chatRepository.findChatsForUser(userId).stream()
                 .map(chat -> chat.otherUserId(userId))
                 .distinct()
                 .toList();
-        return userStore.findUsers(usernames);
+        return userStore.findUsers(userIds);
     }
 
     public List<MessageRecord> findMessages(String userId, long chatId) {
         ChatRecord chat = requireChatParticipant(userId, chatId);
-        return chatRepository.findMessages(chat.chatId());
+        return chatRepository.findMessages(chat.chatId()).stream()
+                .map(this::mapExternalMessage)
+                .toList();
     }
 
-    public ChatSummary createChat(String userId, String targetUserId) {
-        if (userId.equals(targetUserId)) {
+    public ChatSummary createChat(String userId, String targetUsername) {
+        User targetUser = userStore.findByUsername(targetUsername);
+        if (targetUser == null) {
+            throw new ChatException(HttpStatus.NOT_FOUND, "Target user was not found");
+        }
+        if (userId.equals(targetUser.userId())) {
             throw new ChatException(HttpStatus.BAD_REQUEST, "Cannot create chat with the same user");
         }
-        if (!sessionRegistry.isConnected(targetUserId)) {
+        if (!sessionRegistry.isConnected(targetUser.userId())) {
             throw new ChatException(HttpStatus.CONFLICT, "Target user is not connected");
         }
 
-        ChatRecord chat = chatRepository.createChat(userId, targetUserId);
-        userStore.remember(targetUserId);
-        return new ChatSummary(chat.chatId(), chat.otherUserId(userId));
+        ChatRecord chat = chatRepository.createChat(userId, targetUser.userId());
+        return new ChatSummary(
+                chat.chatId(),
+                targetUser.username(),
+                "DIRECT"
+        );
     }
 
     public MessageDelivery sendMessage(String senderUserId, SendMessageCommand command) {
-        if (command == null || command.chatId() == null
-                || command.text() == null || command.text().isBlank()) {
+        if (command == null || command.chatId() == null || command.text() == null || command.text().isBlank()) {
             throw new ChatException(HttpStatus.BAD_REQUEST, "use {\"chatId\":123,\"text\":\"...\"}");
         }
 
         ChatRecord chat = requireChatParticipant(senderUserId, command.chatId());
         String recipientUserId = chat.otherUserId(senderUserId);
         if (!sessionRegistry.isConnected(recipientUserId)) {
-            throw new ChatException(HttpStatus.CONFLICT, "user '" + recipientUserId + "' is not connected.");
+            throw new ChatException(HttpStatus.CONFLICT, "Target user is not connected");
         }
 
         MessageRecord storedMessage = chatRepository.appendMessage(chat.chatId(), senderUserId, command.text());
-        return new MessageDelivery(recipientUserId, storedMessage);
+        return new MessageDelivery(recipientUserId, mapExternalMessage(storedMessage));
     }
 
     public String findChatRecipientUserId(String userId, long chatId) {
@@ -80,7 +100,7 @@ public final class ChatService {
     }
 
     public PresenceEvent acceptPing(String userId) {
-        var user = userStore.ping(userId);
+        User user = userStore.ping(userId);
         return new PresenceEvent("presence", user.username(), user.lastPingTime());
     }
 
@@ -91,11 +111,30 @@ public final class ChatService {
                 .toList();
     }
 
+    public String usernameForUserId(String userId) {
+        User user = resolveUser(userId);
+        return user == null ? userId : user.username();
+    }
+
     private ChatRecord requireChatParticipant(String userId, long chatId) {
         ChatRecord chat = chatRepository.findChat(chatId);
         if (chat == null || !chat.hasParticipant(userId)) {
             throw new ChatException(HttpStatus.NOT_FOUND, "Chat not found");
         }
         return chat;
+    }
+
+    private MessageRecord mapExternalMessage(MessageRecord record) {
+        User sender = resolveUser(record.senderUserId());
+        String senderUsername = sender == null ? record.senderUserId() : sender.username();
+        return new MessageRecord(record.chatId(), senderUsername, record.text(), record.timestamp());
+    }
+
+    private User resolveUser(String userReference) {
+        User user = userStore.findUser(userReference);
+        if (user != null) {
+            return user;
+        }
+        return userStore.findByUsername(userReference);
     }
 }

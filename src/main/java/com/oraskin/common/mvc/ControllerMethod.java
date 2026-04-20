@@ -8,6 +8,7 @@ public record ControllerMethod(
         Method method,
         String requestMethod,
         String pathPattern,
-        Map<String, String> pathVariables
+        Map<String, String> pathVariables,
+        boolean publicEndpoint
 ) {
 }

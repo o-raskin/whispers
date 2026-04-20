@@ -2,6 +2,7 @@ package com.oraskin.resource;
 
 import com.oraskin.chat.service.ChatService;
 import com.oraskin.chat.value.ChatSummary;
+import com.oraskin.common.auth.AuthenticatedUser;
 import com.oraskin.common.mvc.annotation.RequestMapping;
 import com.oraskin.common.mvc.annotation.RequestParam;
 import com.oraskin.common.mvc.annotation.RestController;
@@ -18,15 +19,15 @@ public final class ChatsController {
     }
 
     @RequestMapping(method = "GET")
-    public List<ChatSummary> getChats(@RequestParam("userId") String userId) {
-        return chatService.findChatsForUser(userId);
+    public List<ChatSummary> getChats(AuthenticatedUser user) {
+        return chatService.findChatsForUser(user.userId());
     }
 
     @RequestMapping(method = "POST")
     public ChatSummary createChat(
-            @RequestParam("userId") String userId,
+            AuthenticatedUser user,
             @RequestParam("targetUserId") String targetUserId
     ) {
-        return chatService.createChat(userId, targetUserId);
+        return chatService.createChat(user.userId(), targetUserId);
     }
 }

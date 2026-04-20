@@ -44,7 +44,7 @@ public final class WebSocketSupport {
         }
     }
 
-    public void writeHandshakeResponse(OutputStream output, String websocketKey) throws Exception {
+    public void writeHandshakeResponse(OutputStream output, String websocketKey, String websocketProtocol) throws Exception {
         String acceptValue = Base64.getEncoder()
                 .encodeToString(MessageDigest.getInstance("SHA-1")
                         .digest((websocketKey + WEBSOCKET_MAGIC).getBytes(StandardCharsets.ISO_8859_1)));
@@ -53,8 +53,11 @@ public final class WebSocketSupport {
                 + "HTTP/1.1 " + HttpStatus.SWITCHING_PROTOCOLS.code() + " " + HttpStatus.SWITCHING_PROTOCOLS.reasonPhrase() + "\r\n"
                 + "Upgrade: websocket\r\n"
                 + "Connection: Upgrade\r\n"
-                + "Sec-WebSocket-Accept: " + acceptValue + "\r\n"
-                + "\r\n";
+                + "Sec-WebSocket-Accept: " + acceptValue + "\r\n";
+        if (websocketProtocol != null && !websocketProtocol.isBlank()) {
+            response += "Sec-WebSocket-Protocol: " + websocketProtocol + "\r\n";
+        }
+        response += "\r\n";
         output.write(response.getBytes(StandardCharsets.ISO_8859_1));
         output.flush();
     }

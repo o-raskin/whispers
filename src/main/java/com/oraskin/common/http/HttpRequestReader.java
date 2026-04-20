@@ -63,7 +63,7 @@ public final class HttpRequestReader {
         }
 
         String body = readBody(input, headers);
-        return new HttpRequest(requestLine[0], path, params, headers, body);
+        return new HttpRequest(requestLine[0], path, params, headers, body, null);
     }
 
     private static String readBody(InputStream input, Map<String, String> headers) throws IOException {

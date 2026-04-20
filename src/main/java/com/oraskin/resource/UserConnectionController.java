@@ -1,7 +1,7 @@
 package com.oraskin.resource;
 
+import com.oraskin.common.auth.AuthenticatedUser;
 import com.oraskin.common.mvc.annotation.RequestMapping;
-import com.oraskin.common.mvc.annotation.RequestParam;
 import com.oraskin.common.mvc.annotation.RestController;
 import com.oraskin.user.session.service.SessionService;
 
@@ -19,11 +19,11 @@ public final class UserConnectionController {
 
     @RequestMapping(method = "GET")
     public String connect(
-            @RequestParam("userId") String userId,
+            AuthenticatedUser user,
             Socket socket,
             OutputStream output
     ) {
-        sessionService.openSession(userId, socket, output);
-        return "CONNECTED:" + userId;
+        sessionService.openSession(user, socket, output);
+        return "CONNECTED:" + user.username();
     }
 }
