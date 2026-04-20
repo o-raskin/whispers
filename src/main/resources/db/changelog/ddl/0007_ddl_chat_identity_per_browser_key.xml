@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="0017-chat-identity-per-browser-key" author="oraskin">
+        <sql>
+            ALTER TABLE chats
+            DROP CONSTRAINT IF EXISTS uq_chats_participants_type;
+        </sql>
+
+        <sql>
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_chats_identity
+            ON chats (first_user_id, first_user_key_id, second_user_id, second_user_key_id, chat_type) NULLS NOT DISTINCT;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

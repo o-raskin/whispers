@@ -42,4 +42,9 @@ public final class QueryParams {
         }
         return value;
     }
+
+    public String get(String key) {
+        String value = values.get(key);
+        return value == null || value.isBlank() ? null : value;
+    }
 }

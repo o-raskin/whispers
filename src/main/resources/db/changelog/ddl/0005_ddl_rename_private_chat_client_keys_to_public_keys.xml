@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="0014-rename-private-chat-client-keys-table" author="oraskin">
+        <validCheckSum>ANY</validCheckSum>
+
+        <sql splitStatements="false" endDelimiter="$$;">
+            DO $$
+            BEGIN
+                IF to_regclass('public.private_chat_client_keys') IS NOT NULL
+                   AND to_regclass('public.public_keys') IS NULL THEN
+                    ALTER TABLE public.private_chat_client_keys RENAME TO public_keys;
+                END IF;
+            END
+            $$;
+        </sql>
+
+        <sql splitStatements="false" endDelimiter="$$;">
+            DO $$
+            BEGIN
+                IF to_regclass('public.idx_private_chat_client_keys_user_status_updated') IS NOT NULL
+                   AND to_regclass('public.idx_public_keys_user_status_updated') IS NULL THEN
+                    ALTER INDEX public.idx_private_chat_client_keys_user_status_updated
+                        RENAME TO idx_public_keys_user_status_updated;
+                END IF;
+            END
+            $$;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

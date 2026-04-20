@@ -2,12 +2,21 @@ package com.oraskin.chat.repository;
 
 import com.oraskin.chat.repository.entity.ChatRecord;
 import com.oraskin.chat.repository.entity.MessageRecord;
+import com.oraskin.chat.repository.entity.PrivateMessageRecord;
+import com.oraskin.chat.privatechat.value.EncryptedPrivateMessagePayload;
+import com.oraskin.chat.value.ChatType;
 
 import java.util.List;
 
 public interface ChatRepository {
 
-    ChatRecord createChat(String firstUserId, String secondUserId);
+    ChatRecord createChat(
+            String firstUserId,
+            String firstUserKeyId,
+            String secondUserId,
+            String secondUserKeyId,
+            ChatType chatType
+    );
 
     ChatRecord findChat(long chatId);
 
@@ -16,5 +25,9 @@ public interface ChatRepository {
     MessageRecord appendMessage(long chatId, String senderUserId, String text);
 
     List<MessageRecord> findMessages(long chatId);
+
+    PrivateMessageRecord appendPrivateMessage(long chatId, String senderUserId, EncryptedPrivateMessagePayload encryptedMessage);
+
+    List<PrivateMessageRecord> findPrivateMessages(long chatId);
 
 }

@@ -7,6 +7,7 @@ import com.oraskin.common.websocket.WebSocketFrame;
 import com.oraskin.common.websocket.WebSocketSupport;
 import com.oraskin.user.session.ClientSession;
 import com.oraskin.websocket.message.ChatMessageService;
+import com.oraskin.websocket.message.PrivateChatMessageService;
 import com.oraskin.websocket.presence.PresenceService;
 import com.oraskin.websocket.typing.TypingStateService;
 
@@ -23,17 +24,20 @@ public final class WebSocketConnectionHandler {
     private final WebSocketSupport webSocketSupport;
     private final PresenceService presenceService;
     private final ChatMessageService chatMessageService;
+    private final PrivateChatMessageService privateChatMessageService;
     private final TypingStateService typingStateService;
 
     public WebSocketConnectionHandler(
             WebSocketSupport webSocketSupport,
             PresenceService presenceService,
             ChatMessageService chatMessageService,
+            PrivateChatMessageService privateChatMessageService,
             TypingStateService typingStateService
     ) {
         this.webSocketSupport = webSocketSupport;
         this.presenceService = presenceService;
         this.chatMessageService = chatMessageService;
+        this.privateChatMessageService = privateChatMessageService;
         this.typingStateService = typingStateService;
     }
 
@@ -87,6 +91,7 @@ public final class WebSocketConnectionHandler {
         switch (command.type()) {
             case PRESENCE -> presenceService.sendPresence(session);
             case MESSAGE -> chatMessageService.sendMessage(session, requireChatId(command), command.text());
+            case PRIVATE_MESSAGE -> privateChatMessageService.sendMessage(session, requireChatId(command), command.privateMessage());
             case TYPING_START -> typingStateService.startTyping(session, requireChatId(command));
             case TYPING_END -> typingStateService.stopTyping(session, requireChatId(command));
             default -> session.sendPayload("ERROR: unsupported message payload.");

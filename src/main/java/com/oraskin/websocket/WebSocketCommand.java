@@ -1,5 +1,12 @@
 package com.oraskin.websocket;
 
-public record WebSocketCommand(WebSocketCommandType type, Long chatId, String text) {
+import com.oraskin.chat.privatechat.value.EncryptedPrivateMessagePayload;
+
+public record WebSocketCommand(
+        WebSocketCommandType type,
+        Long chatId,
+        String text,
+        EncryptedPrivateMessagePayload privateMessage
+) {
 
 }

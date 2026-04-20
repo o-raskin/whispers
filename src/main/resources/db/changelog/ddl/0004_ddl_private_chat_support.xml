@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="0011-add-chat-type-to-chats" author="oraskin">
+        <addColumn tableName="chats">
+            <column name="chat_type" type="TEXT" defaultValue="DIRECT"/>
+        </addColumn>
+
+        <sql>
+            UPDATE chats
+            SET chat_type = 'DIRECT'
+            WHERE chat_type IS NULL;
+        </sql>
+
+        <addNotNullConstraint tableName="chats" columnName="chat_type" columnDataType="TEXT"/>
+
+        <dropUniqueConstraint tableName="chats" constraintName="uq_chats_participants"/>
+        <addUniqueConstraint
+                tableName="chats"
+                columnNames="first_user_id, second_user_id, chat_type"
+                constraintName="uq_chats_participants_type"/>
+    </changeSet>
+
+    <changeSet id="0012-create-private-chat-client-keys" author="oraskin">
+        <validCheckSum>ANY</validCheckSum>
+
+        <sql>
+            CREATE TABLE IF NOT EXISTS private_chat_client_keys (
+                user_id TEXT NOT NULL,
+                key_id TEXT NOT NULL,
+                public_key TEXT NOT NULL,
+                algorithm TEXT NOT NULL,
+                key_format TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+            );
+        </sql>
+
+        <sql splitStatements="false" endDelimiter="$$;">
+            DO $$
+            BEGIN
+                IF to_regclass('public.private_chat_client_keys') IS NOT NULL
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM pg_constraint
+                       WHERE conname = 'pk_private_chat_client_keys'
+                   ) THEN
+                    ALTER TABLE public.private_chat_client_keys
+                        ADD CONSTRAINT pk_private_chat_client_keys PRIMARY KEY (user_id, key_id);
+                END IF;
+            END
+            $$;
+        </sql>
+
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_private_chat_client_keys_user_status_updated
+            ON private_chat_client_keys (user_id, status, updated_at);
+        </sql>
+    </changeSet>
+
+    <changeSet id="0013-create-private-messages" author="oraskin">
+        <createTable tableName="private_messages">
+            <column name="id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_private_messages"/>
+            </column>
+            <column name="chat_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sender_user_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="protocol_version" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="encryption_algorithm" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="key_wrap_algorithm" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ciphertext" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="nonce" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sender_key_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sender_message_key_envelope" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="recipient_key_id" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="recipient_message_key_envelope" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="private_messages"
+                baseColumnNames="chat_id"
+                constraintName="fk_private_messages_chat"
+                referencedTableName="chats"
+                referencedColumnNames="chat_id"
+                onDelete="CASCADE"/>
+
+        <createIndex indexName="idx_private_messages_chat_id_id" tableName="private_messages">
+            <column name="chat_id"/>
+            <column name="id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

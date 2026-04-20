@@ -12,9 +12,13 @@ import com.oraskin.auth.service.AccessTokenService;
 import com.oraskin.auth.service.AuthService;
 import com.oraskin.auth.service.IdentityProvisioningService;
 import com.oraskin.auth.service.RefreshTokenService;
+import com.oraskin.chat.key.persistence.DatabasePrivateChatKeyStore;
+import com.oraskin.chat.key.persistence.PrivateChatKeyStore;
+import com.oraskin.chat.key.service.PublicKeyService;
 import com.oraskin.chat.repository.ChatRepository;
 import com.oraskin.chat.service.ChatService;
 import com.oraskin.chat.repository.DatabaseChatRepository;
+import com.oraskin.chat.privatechat.service.PrivateChatService;
 import com.oraskin.common.auth.RequestAuthenticationService;
 import com.oraskin.common.http.HttpRequest;
 import com.oraskin.common.http.HttpRequestReader;
@@ -31,6 +35,8 @@ import com.oraskin.common.mvc.ControllerResultWriter;
 import com.oraskin.common.mvc.HttpApiRouter;
 import com.oraskin.resource.ChatsController;
 import com.oraskin.resource.MessagesController;
+import com.oraskin.resource.PublicKeysController;
+import com.oraskin.resource.PrivateChatsController;
 import com.oraskin.resource.UserConnectionController;
 import com.oraskin.resource.UsersController;
 import com.oraskin.common.http.HttpResponseWriter;
@@ -39,6 +45,7 @@ import com.oraskin.websocket.SessionWebSocketMessageSender;
 import com.oraskin.websocket.WebSocketMessageSender;
 import com.oraskin.websocket.WebSocketConnectionHandler;
 import com.oraskin.websocket.message.ChatMessageService;
+import com.oraskin.websocket.message.PrivateChatMessageService;
 import com.oraskin.websocket.presence.PresenceService;
 import com.oraskin.websocket.typing.TypingStateService;
 import com.oraskin.user.session.service.SessionService;
@@ -64,6 +71,7 @@ public final class ChatServer {
     private final SessionService sessionService;
     private final RequestAuthenticationService requestAuthenticationService;
     private final ChatMessageService chatMessageService;
+    private final PrivateChatMessageService privateChatMessageService;
     private final TypingStateService typingStateService;
     private final PresenceService presenceService;
 
@@ -79,6 +87,7 @@ public final class ChatServer {
 
         UserStore userStore = new DatabaseUserStore(connectionFactory, clock);
         ChatRepository chatRepository = new DatabaseChatRepository(connectionFactory, clock);
+        PrivateChatKeyStore privateChatKeyStore = new DatabasePrivateChatKeyStore(connectionFactory, clock);
 
         InMemorySessionRegistry sessionRegistry = new InMemorySessionRegistry();
 
@@ -118,19 +127,28 @@ public final class ChatServer {
                 frontendConfig.secureCookies()
         );
 
+        PublicKeyService publicKeyService = new PublicKeyService(privateChatKeyStore);
         ChatService chatService = new ChatService(
                 chatRepository,
                 sessionRegistry,
                 userStore
         );
+        PrivateChatService privateChatService = new PrivateChatService(
+                chatRepository,
+                userStore,
+                publicKeyService
+        );
         UserProfileService userProfileService = new UserProfileService(userStore, authIdentityStore);
         WebSocketMessageSender webSocketMessageSender = new SessionWebSocketMessageSender(sessionRegistry);
 
         this.chatMessageService = new ChatMessageService(chatService, webSocketMessageSender);
+        this.privateChatMessageService = new PrivateChatMessageService(privateChatService, webSocketMessageSender);
         this.typingStateService = new TypingStateService(chatService, webSocketMessageSender);
         this.presenceService = new PresenceService(chatService, webSocketMessageSender);
         this.sessionService = new SessionService(sessionRegistry);
         ChatsController chatsController = new ChatsController(chatService);
+        PrivateChatsController privateChatsController = new PrivateChatsController(privateChatService);
+        PublicKeysController publicKeysController = new PublicKeysController(publicKeyService);
         UserConnectionController userConnectionController = new UserConnectionController(sessionService);
         this.httpRequestReader = new HttpRequestReader();
         HttpResponseWriter httpResponseWriter = new HttpResponseWriter(frontendConfig);
@@ -140,6 +158,7 @@ public final class ChatServer {
                 webSocketSupport,
                 presenceService,
                 chatMessageService,
+                privateChatMessageService,
                 typingStateService
         );
         this.httpApiRouter = new HttpApiRouter(
@@ -147,6 +166,8 @@ public final class ChatServer {
                         new AuthController(authService),
                         userConnectionController,
                         chatsController,
+                        privateChatsController,
+                        publicKeysController,
                         new MessagesController(chatService),
                         new UsersController(chatService, userProfileService)
                 ),
@@ -204,6 +225,8 @@ public final class ChatServer {
                 );
                 controllerResultWriter.writeWebSocket(session, connectResult);
                 webSocketConnectionHandler.handle(session, input);
+            } catch (Exception e) {
+                throw e;
             } finally {
                 typingStateService.clearUser(session.userId());
                 sessionService.closeSession(session.userId());

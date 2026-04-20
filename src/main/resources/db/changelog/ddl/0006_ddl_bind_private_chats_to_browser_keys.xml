@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="0015-add-browser-key-bindings-to-chats" author="oraskin">
+        <addColumn tableName="chats">
+            <column name="first_user_key_id" type="TEXT"/>
+            <column name="second_user_key_id" type="TEXT"/>
+        </addColumn>
+
+        <sql>
+            UPDATE chats chat
+            SET first_user_key_id = public_key.key_id
+            FROM public_keys public_key
+            WHERE chat.chat_type = 'PRIVATE'
+              AND chat.first_user_key_id IS NULL
+              AND public_key.user_id = chat.first_user_id
+              AND public_key.updated_at = (
+                  SELECT MAX(candidate.updated_at)
+                  FROM public_keys candidate
+                  WHERE candidate.user_id = chat.first_user_id
+              );
+        </sql>
+
+        <sql>
+            UPDATE chats chat
+            SET second_user_key_id = public_key.key_id
+            FROM public_keys public_key
+            WHERE chat.chat_type = 'PRIVATE'
+              AND chat.second_user_key_id IS NULL
+              AND public_key.user_id = chat.second_user_id
+              AND public_key.updated_at = (
+                  SELECT MAX(candidate.updated_at)
+                  FROM public_keys candidate
+                  WHERE candidate.user_id = chat.second_user_id
+              );
+        </sql>
+
+        <sql>
+            DELETE FROM chats
+            WHERE chat_type = 'PRIVATE'
+              AND (first_user_key_id IS NULL OR second_user_key_id IS NULL);
+        </sql>
+
+        <addForeignKeyConstraint
+                baseTableName="chats"
+                baseColumnNames="first_user_id, first_user_key_id"
+                referencedTableName="public_keys"
+                referencedColumnNames="user_id, key_id"
+                constraintName="fk_chats_first_user_public_key"/>
+
+        <addForeignKeyConstraint
+                baseTableName="chats"
+                baseColumnNames="second_user_id, second_user_key_id"
+                referencedTableName="public_keys"
+                referencedColumnNames="user_id, key_id"
+                constraintName="fk_chats_second_user_public_key"/>
+    </changeSet>
+
+    <changeSet id="0016-add-chat-type-key-binding-check" author="oraskin">
+        <sql>
+            ALTER TABLE chats
+            ADD CONSTRAINT chk_chats_private_key_binding
+            CHECK (
+                (chat_type = 'PRIVATE' AND first_user_key_id IS NOT NULL AND second_user_key_id IS NOT NULL)
+                OR
+                (chat_type &lt;&gt; 'PRIVATE' AND first_user_key_id IS NULL AND second_user_key_id IS NULL)
+            );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
