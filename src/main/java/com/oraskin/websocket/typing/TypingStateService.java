@@ -35,7 +35,10 @@ public final class TypingStateService {
     public void startTyping(ClientSession clientSession, long chatId) {
         var recipientUserId = chatService.findChatRecipientUserId(clientSession.userId(), chatId);
         TypingKey key = new TypingKey(chatId, clientSession.userId());
+        boolean typingStarted;
         synchronized (states) {
+            TypingState current = states.get(key);
+            typingStarted = current == null;
             long version = nextVersion(key);
             cancelCurrent(key);
             ScheduledFuture<?> future = scheduler.schedule(
@@ -45,10 +48,12 @@ public final class TypingStateService {
             );
             states.put(key, new TypingState(recipientUserId, version, future));
         }
-        webSocketMessageSender.sendToUser(
-                recipientUserId,
-                new TypingEvent("typing:start", chatId, chatService.usernameForUserId(clientSession.userId()))
-        );
+        if (typingStarted) {
+            webSocketMessageSender.sendToUser(
+                    recipientUserId,
+                    new TypingEvent("typing:start", chatId, chatService.usernameForUserId(clientSession.userId()))
+            );
+        }
     }
 
     public void stopTyping(ClientSession clientSession, long chatId) {

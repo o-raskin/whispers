@@ -24,7 +24,11 @@ public interface ChatRepository {
 
     MessageRecord appendMessage(long chatId, String senderUserId, String text);
 
+    MessageRecord findMessage(long messageId);
+
     List<MessageRecord> findMessages(long chatId);
+
+    void deleteMessage(long messageId);
 
     PrivateMessageRecord appendPrivateMessage(long chatId, String senderUserId, EncryptedPrivateMessagePayload encryptedMessage);
 

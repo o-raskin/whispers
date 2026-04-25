@@ -20,8 +20,11 @@ import com.oraskin.chat.service.ChatService;
 import com.oraskin.chat.repository.DatabaseChatRepository;
 import com.oraskin.chat.privatechat.service.PrivateChatService;
 import com.oraskin.common.auth.RequestAuthenticationService;
+import com.oraskin.common.http.ErrorResponse;
 import com.oraskin.common.http.HttpRequest;
 import com.oraskin.common.http.HttpRequestReader;
+import com.oraskin.common.http.HttpStatus;
+import com.oraskin.common.http.TransportErrorMapper;
 import com.oraskin.common.postgres.LiquibaseMigrationRunner;
 import com.oraskin.common.postgres.PostgresConfig;
 import com.oraskin.common.postgres.PostgresConnectionFactory;
@@ -68,6 +71,7 @@ public final class ChatServer {
     private final WebSocketSupport webSocketSupport;
     private final WebSocketConnectionHandler webSocketConnectionHandler;
     private final ControllerResultWriter controllerResultWriter;
+    private final HttpResponseWriter httpResponseWriter;
     private final SessionService sessionService;
     private final RequestAuthenticationService requestAuthenticationService;
     private final ChatMessageService chatMessageService;
@@ -128,10 +132,12 @@ public final class ChatServer {
         );
 
         PublicKeyService publicKeyService = new PublicKeyService(privateChatKeyStore);
+        WebSocketMessageSender webSocketMessageSender = new SessionWebSocketMessageSender(sessionRegistry);
         ChatService chatService = new ChatService(
                 chatRepository,
                 sessionRegistry,
-                userStore
+                userStore,
+                webSocketMessageSender
         );
         PrivateChatService privateChatService = new PrivateChatService(
                 chatRepository,
@@ -139,7 +145,6 @@ public final class ChatServer {
                 publicKeyService
         );
         UserProfileService userProfileService = new UserProfileService(userStore, authIdentityStore);
-        WebSocketMessageSender webSocketMessageSender = new SessionWebSocketMessageSender(sessionRegistry);
 
         this.chatMessageService = new ChatMessageService(chatService, webSocketMessageSender);
         this.privateChatMessageService = new PrivateChatMessageService(privateChatService, webSocketMessageSender);
@@ -151,7 +156,7 @@ public final class ChatServer {
         PublicKeysController publicKeysController = new PublicKeysController(publicKeyService);
         UserConnectionController userConnectionController = new UserConnectionController(sessionService);
         this.httpRequestReader = new HttpRequestReader();
-        HttpResponseWriter httpResponseWriter = new HttpResponseWriter(frontendConfig);
+        this.httpResponseWriter = new HttpResponseWriter(frontendConfig);
         this.webSocketSupport = new WebSocketSupport();
         this.controllerResultWriter = new ControllerResultWriter(httpResponseWriter);
         this.webSocketConnectionHandler = new WebSocketConnectionHandler(
@@ -201,11 +206,13 @@ public final class ChatServer {
         } catch (SocketException | EOFException ignored) {
             // Client disconnected while request was being read.
         } catch (IOException e) {
-            System.err.println("Connection failed: " + e.getMessage());
+            System.err.println("Connection failed: " + e.getClass().getSimpleName());
         }
     }
 
     private void handleWebSocketConnection(HttpRequest request, Socket socket, InputStream input, OutputStream output) throws IOException {
+        ClientSession session = null;
+        boolean handshakeCompleted = false;
         try {
             webSocketSupport.validateHandshake(request);
             ControllerResult connectResult = httpApiRouter.invoke(request, socket, output);
@@ -213,30 +220,47 @@ public final class ChatServer {
                 throw new IOException("WebSocket connect route not found.");
             }
             HttpRequest authenticatedRequest = requestAuthenticationService.authenticateRequired(request);
-            ClientSession session = sessionService.findSession(authenticatedRequest.authenticatedUser().userId());
+            session = sessionService.findSession(authenticatedRequest.authenticatedUser().userId());
             if (session == null) {
-                throw new IOException("WebSocket session was not opened by connect controller.");
+                throw new IllegalStateException("WebSocket session was not opened by connect controller.");
             }
+            webSocketSupport.writeHandshakeResponse(
+                    output,
+                    request.header("sec-websocket-key"),
+                    requestAuthenticationService.resolveWebSocketSubprotocol(request)
+            );
+            handshakeCompleted = true;
             try {
-                webSocketSupport.writeHandshakeResponse(
-                        output,
-                        request.header("sec-websocket-key"),
-                        requestAuthenticationService.resolveWebSocketSubprotocol(request)
-                );
                 controllerResultWriter.writeWebSocket(session, connectResult);
                 webSocketConnectionHandler.handle(session, input);
-            } catch (Exception e) {
-                throw e;
             } finally {
                 typingStateService.clearUser(session.userId());
                 sessionService.closeSession(session.userId());
                 System.out.println("Disconnected user: " + session.userId());
             }
-        } catch (IOException e) {
-            throw e;
         } catch (Exception e) {
-            throw new IOException("WebSocket connection failed: " + e.getMessage(), e);
+            if (!handshakeCompleted) {
+                writeWebSocketUpgradeFailure(output, e);
+                return;
+            }
+            if (e instanceof IOException ioException) {
+                throw ioException;
+            }
+            throw new IOException("WebSocket connection failed", e);
+        } finally {
+            if (!handshakeCompleted && session != null) {
+                typingStateService.clearUser(session.userId());
+                sessionService.closeSession(session.userId());
+            }
         }
+    }
+
+    private void writeWebSocketUpgradeFailure(OutputStream output, Exception failure) throws IOException {
+        HttpStatus status = TransportErrorMapper.httpStatus(failure);
+        if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
+            System.err.println("WebSocket upgrade failed: " + failure.getClass().getSimpleName());
+        }
+        httpResponseWriter.writeJson(output, status, new ErrorResponse(TransportErrorMapper.clientMessage(failure)));
     }
 
 }

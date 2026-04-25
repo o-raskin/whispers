@@ -17,7 +17,10 @@ import com.oraskin.connection.SendPrivateMessageCommand;
 import com.oraskin.user.data.domain.User;
 import com.oraskin.user.data.persistence.UserStore;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public final class PrivateChatService {
@@ -88,8 +91,10 @@ public final class PrivateChatService {
     public List<PrivateMessageView> findMessages(String userId, long chatId, String keyId) {
         ChatRecord chat = requirePrivateChatParticipant(userId, chatId);
         requireBoundBrowserKey(chat, userId, keyId);
-        return chatRepository.findPrivateMessages(chat.chatId()).stream()
-                .map(this::mapExternalMessage)
+        List<PrivateMessageRecord> storedMessages = chatRepository.findPrivateMessages(chat.chatId());
+        Map<String, User> usersById = loadUsersById(senderUserIds(storedMessages));
+        return storedMessages.stream()
+                .map(record -> mapExternalMessage(record, usersById.get(record.senderUserId())))
                 .toList();
     }
 
@@ -165,7 +170,10 @@ public final class PrivateChatService {
     }
 
     private PrivateMessageView mapExternalMessage(PrivateMessageRecord record) {
-        User sender = resolveUser(record.senderUserId());
+        return mapExternalMessage(record, resolveUser(record.senderUserId()));
+    }
+
+    private PrivateMessageView mapExternalMessage(PrivateMessageRecord record, User sender) {
         String senderUsername = sender == null ? record.senderUserId() : sender.username();
         return new PrivateMessageView(
                 record.chatId(),
@@ -174,6 +182,26 @@ public final class PrivateChatService {
                 record.encryptedMessage(),
                 record.timestamp()
         );
+    }
+
+    private List<String> senderUserIds(List<PrivateMessageRecord> messages) {
+        List<String> userIds = new ArrayList<>();
+        for (PrivateMessageRecord message : messages) {
+            userIds.add(message.senderUserId());
+        }
+        return userIds;
+    }
+
+    private Map<String, User> loadUsersById(List<String> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, User> usersById = new HashMap<>();
+        for (User user : userStore.findUsers(userIds)) {
+            usersById.put(user.userId(), user);
+        }
+        return usersById;
     }
 
     private User resolveUser(String userReference) {

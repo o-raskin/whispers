@@ -109,7 +109,7 @@ public final class DatabaseChatRepository implements ChatRepository {
         String sql = """
                 INSERT INTO messages (chat_id, sender_user_id, text, created_at)
                 VALUES (?, ?, ?, ?)
-                RETURNING chat_id, sender_user_id, text, created_at
+                RETURNING id, chat_id, sender_user_id, text, created_at
                 """;
 
         Instant createdAt = Instant.now(clock);
@@ -132,9 +132,32 @@ public final class DatabaseChatRepository implements ChatRepository {
     }
 
     @Override
+    public MessageRecord findMessage(long messageId) {
+        String sql = """
+                SELECT id, chat_id, sender_user_id, text, created_at
+                FROM messages
+                WHERE id = ?
+                """;
+
+        try (Connection connection = connectionFactory.openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, messageId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return null;
+                }
+                return mapMessage(resultSet);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to find message", e);
+        }
+    }
+
+    @Override
     public List<MessageRecord> findMessages(long chatId) {
         String sql = """
-                SELECT chat_id, sender_user_id, text, created_at
+                SELECT id, chat_id, sender_user_id, text, created_at
                 FROM messages
                 WHERE chat_id = ?
                 ORDER BY id
@@ -153,6 +176,22 @@ public final class DatabaseChatRepository implements ChatRepository {
             }
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to find messages", e);
+        }
+    }
+
+    @Override
+    public void deleteMessage(long messageId) {
+        String sql = """
+                DELETE FROM messages
+                WHERE id = ?
+                """;
+
+        try (Connection connection = connectionFactory.openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, messageId);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to delete message", e);
         }
     }
 
@@ -284,6 +323,7 @@ public final class DatabaseChatRepository implements ChatRepository {
 
     private MessageRecord mapMessage(ResultSet resultSet) throws SQLException {
         return new MessageRecord(
+                resultSet.getLong("id"),
                 resultSet.getLong("chat_id"),
                 resultSet.getString("sender_user_id"),
                 resultSet.getString("text"),

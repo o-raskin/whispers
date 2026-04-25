@@ -31,7 +31,7 @@ public final class SessionWebSocketMessageSender implements WebSocketMessageSend
             var jsonPayload = JsonCodec.write(payload);
             session.sendPayload(jsonPayload);
         } catch (IOException e) {
-            System.err.println("Cannot send WebSocket payload to user '" + session.userId() + "': " + e.getMessage());
+            System.err.println("Cannot send WebSocket payload to user '" + session.userId() + "': " + e.getClass().getSimpleName());
         }
     }
 

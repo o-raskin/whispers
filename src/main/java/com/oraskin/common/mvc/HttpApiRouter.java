@@ -1,11 +1,11 @@
 package com.oraskin.common.mvc;
 
 import com.oraskin.common.auth.RequestAuthenticationService;
-import com.oraskin.chat.service.ChatException;
 import com.oraskin.common.http.ErrorResponse;
 import com.oraskin.common.http.HttpRequest;
 import com.oraskin.common.http.HttpResponseWriter;
 import com.oraskin.common.http.HttpStatus;
+import com.oraskin.common.http.TransportErrorMapper;
 import com.oraskin.common.mvc.annotation.PublicEndpoint;
 import com.oraskin.common.mvc.annotation.RequestMapping;
 import com.oraskin.common.mvc.annotation.RestController;
@@ -50,12 +50,12 @@ public final class HttpApiRouter {
                 return;
             }
             httpResponseWriter.writeJson(output, HttpStatus.NOT_FOUND, new ErrorResponse("Not found"));
-        } catch (ChatException e) {
-            httpResponseWriter.writeJson(output, e.status(), new ErrorResponse(e.getMessage()));
-        } catch (IOException e) {
-            httpResponseWriter.writeJson(output, HttpStatus.BAD_REQUEST, new ErrorResponse(e.getMessage()));
         } catch (Exception e) {
-            httpResponseWriter.writeJson(output, HttpStatus.BAD_REQUEST, new ErrorResponse(e.getMessage()));
+            HttpStatus status = TransportErrorMapper.httpStatus(e);
+            if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
+                logUnexpectedFailure("HTTP request failed", e);
+            }
+            httpResponseWriter.writeJson(output, status, new ErrorResponse(TransportErrorMapper.clientMessage(e)));
         }
     }
 
@@ -117,5 +117,9 @@ public final class HttpApiRouter {
             }
         }
         return List.copyOf(methods);
+    }
+
+    private void logUnexpectedFailure(String message, Exception failure) {
+        System.err.println(message + ": " + failure.getClass().getSimpleName());
     }
 }

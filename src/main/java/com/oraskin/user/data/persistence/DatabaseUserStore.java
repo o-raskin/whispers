@@ -14,7 +14,9 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -78,9 +80,44 @@ public final class DatabaseUserStore implements UserStore {
 
     @Override
     public List<User> findUsers(Collection<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> orderedUserIds = userIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (orderedUserIds.isEmpty()) {
+            return List.of();
+        }
+
+        String placeholders = String.join(", ", java.util.Collections.nCopies(orderedUserIds.size(), "?"));
+        String sql = """
+                SELECT user_id, username, first_name, last_name, last_ping_time
+                FROM users
+                WHERE user_id IN (%s)
+                """.formatted(placeholders);
+
+        Map<String, User> usersById = new LinkedHashMap<>();
+        try (Connection connection = connectionFactory.openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int index = 0; index < orderedUserIds.size(); index++) {
+                statement.setString(index + 1, orderedUserIds.get(index));
+            }
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    User user = userMapper.toDomain(mapUserData(resultSet));
+                    usersById.put(user.userId(), user);
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to find users by ids", e);
+        }
+
         List<User> users = new ArrayList<>();
-        for (String userId : userIds) {
-            User user = findUser(userId);
+        for (String userId : orderedUserIds) {
+            User user = usersById.get(userId);
             if (user != null) {
                 users.add(user);
             }

@@ -62,7 +62,7 @@ public final class HttpResponseWriter {
                 + "Access-Control-Allow-Origin: " + frontendConfig.origin() + "\r\n"
                 + "Access-Control-Allow-Credentials: true\r\n"
                 + "Access-Control-Allow-Headers: Authorization, Content-Type\r\n"
-                + "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+                + "Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS\r\n"
                 + "Vary: Origin\r\n";
     }
 }

@@ -13,6 +13,7 @@ import com.oraskin.user.data.domain.User;
 import com.oraskin.user.data.persistence.UserStore;
 import com.oraskin.user.session.ClientSession;
 import com.oraskin.user.session.persistence.SessionRegistry;
+import com.oraskin.websocket.WebSocketMessageSender;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -35,9 +36,11 @@ public final class TestSupport {
     public static final class InMemoryChatRepository implements ChatRepository {
 
         private final Map<Long, ChatRecord> chats = new LinkedHashMap<>();
+        private final Map<Long, MessageRecord> messagesById = new LinkedHashMap<>();
         private final Map<Long, List<MessageRecord>> directMessages = new LinkedHashMap<>();
         private final Map<Long, List<PrivateMessageRecord>> privateMessages = new LinkedHashMap<>();
         private long nextChatId = 1L;
+        private long nextMessageId = 1L;
 
         @Override
         public ChatRecord createChat(
@@ -88,14 +91,38 @@ public final class TestSupport {
 
         @Override
         public MessageRecord appendMessage(long chatId, String senderUserId, String text) {
-            MessageRecord record = new MessageRecord(chatId, senderUserId, text, "2026-04-20T12:00:00Z");
+            MessageRecord record = new MessageRecord(nextMessageId++, chatId, senderUserId, text, "2026-04-20T12:00:00Z");
+            messagesById.put(record.messageId(), record);
             directMessages.computeIfAbsent(chatId, ignored -> new ArrayList<>()).add(record);
             return record;
         }
 
         @Override
+        public MessageRecord findMessage(long messageId) {
+            return messagesById.get(messageId);
+        }
+
+        @Override
         public List<MessageRecord> findMessages(long chatId) {
             return List.copyOf(directMessages.getOrDefault(chatId, List.of()));
+        }
+
+        @Override
+        public void deleteMessage(long messageId) {
+            MessageRecord removed = messagesById.remove(messageId);
+            if (removed == null) {
+                return;
+            }
+
+            List<MessageRecord> messages = directMessages.get(removed.chatId());
+            if (messages == null) {
+                return;
+            }
+
+            messages.removeIf(message -> message.messageId() == messageId);
+            if (messages.isEmpty()) {
+                directMessages.remove(removed.chatId());
+            }
         }
 
         @Override
@@ -237,6 +264,17 @@ public final class TestSupport {
         @Override
         public boolean isConnected(String userId) {
             return false;
+        }
+    }
+
+    public static final class NoopWebSocketMessageSender implements WebSocketMessageSender {
+
+        @Override
+        public void sendToUser(String userId, Object payload) {
+        }
+
+        @Override
+        public void sendToUsers(Collection<String> userIds, Object payload) {
         }
     }
 }
