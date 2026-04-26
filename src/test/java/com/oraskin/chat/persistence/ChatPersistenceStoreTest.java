@@ -141,6 +141,7 @@ class ChatPersistenceStoreTest {
         when(resultSet.getString("recipient_key_id")).thenReturn("bob-key");
         when(resultSet.getString("recipient_message_key_envelope")).thenReturn("recipient-envelope");
         when(resultSet.getObject("created_at", java.time.OffsetDateTime.class)).thenReturn(java.time.OffsetDateTime.parse("2026-04-21T10:15:30Z"));
+        when(resultSet.getObject("updated_at", java.time.OffsetDateTime.class)).thenReturn(null);
         DatabaseChatRepository repository = new DatabaseChatRepository(connectionFactoryBackedBy(connection), CLOCK);
 
         ChatRecord chatRecord = repository.createChat("bob-id", "bob-key", "alice-id", "alice-key", ChatType.PRIVATE);
@@ -152,6 +153,7 @@ class ChatPersistenceStoreTest {
 
         assertThat(chatRecord).isEqualTo(new ChatRecord(42L, "alice-id", "bob-id", ChatType.PRIVATE, "alice-key", "bob-key"));
         assertThat(privateMessageRecord.encryptedMessage().ciphertext()).isEqualTo("ciphertext");
+        assertThat(privateMessageRecord.updatedAt()).isNull();
         verify(statement).setString(1, "alice-id");
         verify(statement).setString(2, "alice-key");
         verify(statement).setString(3, "bob-id");
@@ -203,6 +205,7 @@ class ChatPersistenceStoreTest {
         when(appendMessageResultSet.getString("text")).thenReturn("hello");
         when(appendMessageResultSet.getObject("created_at", java.time.OffsetDateTime.class))
                 .thenReturn(java.time.OffsetDateTime.parse("2026-04-21T10:15:30Z"));
+        when(appendMessageResultSet.getObject("updated_at", java.time.OffsetDateTime.class)).thenReturn(null);
 
         when(findMessageStatement.executeQuery()).thenReturn(findMessageResultSet);
         when(findMessageResultSet.next()).thenReturn(true);
@@ -212,6 +215,7 @@ class ChatPersistenceStoreTest {
         when(findMessageResultSet.getString("text")).thenReturn("hello");
         when(findMessageResultSet.getObject("created_at", java.time.OffsetDateTime.class))
                 .thenReturn(java.time.OffsetDateTime.parse("2026-04-21T10:15:45Z"));
+        when(findMessageResultSet.getObject("updated_at", java.time.OffsetDateTime.class)).thenReturn(null);
 
         when(findMessagesStatement.executeQuery()).thenReturn(findMessagesResultSet);
         when(findMessagesResultSet.next()).thenReturn(true, false);
@@ -221,6 +225,7 @@ class ChatPersistenceStoreTest {
         when(findMessagesResultSet.getString("text")).thenReturn("hello");
         when(findMessagesResultSet.getObject("created_at", java.time.OffsetDateTime.class))
                 .thenReturn(java.time.OffsetDateTime.parse("2026-04-21T10:16:30Z"));
+        when(findMessagesResultSet.getObject("updated_at", java.time.OffsetDateTime.class)).thenReturn(null);
         DatabaseChatRepository repository = new DatabaseChatRepository(connectionFactoryBackedBy(connection), CLOCK);
 
         ChatRecord chat = repository.findChat(42L);
@@ -235,7 +240,10 @@ class ChatPersistenceStoreTest {
         assertThat(appendedMessage.messageId()).isEqualTo(100L);
         assertThat(foundMessage.timestamp()).isEqualTo("2026-04-21T10:15:45Z");
         assertThat(appendedMessage.text()).isEqualTo("hello");
+        assertThat(appendedMessage.updatedAt()).isNull();
+        assertThat(foundMessage.updatedAt()).isNull();
         assertThat(messages).extracting(com.oraskin.chat.repository.entity.MessageRecord::timestamp).containsExactly("2026-04-21T10:16:30Z");
+        assertThat(messages).extracting(com.oraskin.chat.repository.entity.MessageRecord::updatedAt).containsExactly((String) null);
         verify(findChatStatement).setLong(1, 42L);
         verify(findChatsStatement).setString(1, "alice-id");
         verify(findChatsStatement).setString(2, "alice-id");
@@ -267,6 +275,7 @@ class ChatPersistenceStoreTest {
         when(resultSet.getString("recipient_key_id")).thenReturn("bob-key");
         when(resultSet.getString("recipient_message_key_envelope")).thenReturn("recipient-envelope");
         when(resultSet.getObject("created_at", java.time.OffsetDateTime.class)).thenReturn(null);
+        when(resultSet.getObject("updated_at", java.time.OffsetDateTime.class)).thenReturn(null);
         when(resultSet.getTimestamp("created_at")).thenReturn(Timestamp.from(Instant.parse("2026-04-21T10:15:30Z")));
         DatabaseChatRepository repository = new DatabaseChatRepository(connectionFactoryBackedBy(connection), CLOCK);
 
@@ -275,6 +284,7 @@ class ChatPersistenceStoreTest {
         assertThat(messages).hasSize(1);
         assertThat(messages.getFirst().timestamp()).isEqualTo("2026-04-21T10:15:30Z");
         assertThat(messages.getFirst().encryptedMessage().recipientKeyId()).isEqualTo("bob-key");
+        assertThat(messages.getFirst().updatedAt()).isNull();
         verify(statement).setLong(1, 42L);
     }
 

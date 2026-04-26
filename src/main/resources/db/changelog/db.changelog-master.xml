@@ -13,5 +13,6 @@
     <include file="db/changelog/ddl/0005_ddl_rename_private_chat_client_keys_to_public_keys.xml"/>
     <include file="db/changelog/ddl/0006_ddl_bind_private_chats_to_browser_keys.xml"/>
     <include file="db/changelog/ddl/0007_ddl_chat_identity_per_browser_key.xml"/>
+    <include file="db/changelog/ddl/0008_ddl_message_updated_at.xml"/>
 
 </databaseChangeLog>

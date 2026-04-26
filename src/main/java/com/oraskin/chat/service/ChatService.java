@@ -6,6 +6,8 @@ import com.oraskin.chat.repository.entity.MessageRecord;
 import com.oraskin.chat.value.ChatSummary;
 import com.oraskin.chat.value.ChatType;
 import com.oraskin.common.http.HttpStatus;
+import com.oraskin.connection.ChatDeleteEvent;
+import com.oraskin.connection.MessageEditEvent;
 import com.oraskin.connection.MessageDeleteEvent;
 import com.oraskin.connection.MessageDelivery;
 import com.oraskin.connection.PresenceEvent;
@@ -73,6 +75,30 @@ public final class ChatService {
                 .toList();
     }
 
+    public MessageRecord editMessage(String userId, long messageId, String text) {
+        if (text == null || text.isBlank()) {
+            throw new ChatException(HttpStatus.BAD_REQUEST, "use {\"text\":\"...\"}");
+        }
+
+        MessageRecord storedMessage = chatRepository.findMessage(messageId);
+        if (storedMessage == null) {
+            throw new ChatException(HttpStatus.NOT_FOUND, "Message not found");
+        }
+
+        ChatRecord chat = requireChatParticipant(userId, storedMessage.chatId());
+        requireChatType(chat, ChatType.DIRECT, "Use /private-chats/{chatId}/messages for PRIVATE chats");
+        if (!storedMessage.senderUserId().equals(userId)) {
+            throw new ChatException(HttpStatus.FORBIDDEN, "Only message owner can edit it");
+        }
+
+        MessageRecord updatedMessage = mapExternalMessage(chatRepository.updateMessage(messageId, text));
+        webSocketMessageSender.sendToUsers(
+                chat.participantUserIds(),
+                new MessageEditEvent("MESSAGE_EDIT", updatedMessage)
+        );
+        return updatedMessage;
+    }
+
     public void deleteMessage(String userId, long messageId) {
         MessageRecord storedMessage = chatRepository.findMessage(messageId);
         if (storedMessage == null) {
@@ -87,8 +113,18 @@ public final class ChatService {
 
         chatRepository.deleteMessage(messageId);
         webSocketMessageSender.sendToUsers(
-                List.of(chat.firstUserId(), chat.secondUserId()),
+                chat.participantUserIds(),
                 new MessageDeleteEvent("MESSAGE_DELETE", chat.chatId(), messageId)
+        );
+    }
+
+    public void deleteChat(String userId, long chatId) {
+        ChatRecord chat = requireChatParticipant(userId, chatId);
+
+        chatRepository.deleteChat(chat.chatId());
+        webSocketMessageSender.sendToUsers(
+                chat.participantUserIds(),
+                new ChatDeleteEvent("CHAT_DELETE", chat.chatId())
         );
     }
 
@@ -170,7 +206,14 @@ public final class ChatService {
 
     private MessageRecord mapExternalMessage(MessageRecord record, User sender) {
         String senderUsername = sender == null ? record.senderUserId() : sender.username();
-        return new MessageRecord(record.messageId(), record.chatId(), senderUsername, record.text(), record.timestamp());
+        return new MessageRecord(
+                record.messageId(),
+                record.chatId(),
+                senderUsername,
+                record.text(),
+                record.timestamp(),
+                record.updatedAt()
+        );
     }
 
     private List<String> otherUserIds(List<ChatRecord> chats, String currentUserId) {

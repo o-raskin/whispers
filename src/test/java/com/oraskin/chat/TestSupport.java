@@ -90,8 +90,22 @@ public final class TestSupport {
         }
 
         @Override
+        public void deleteChat(long chatId) {
+            chats.remove(chatId);
+
+            List<MessageRecord> removedMessages = directMessages.remove(chatId);
+            if (removedMessages != null) {
+                for (MessageRecord removedMessage : removedMessages) {
+                    messagesById.remove(removedMessage.messageId());
+                }
+            }
+
+            privateMessages.remove(chatId);
+        }
+
+        @Override
         public MessageRecord appendMessage(long chatId, String senderUserId, String text) {
-            MessageRecord record = new MessageRecord(nextMessageId++, chatId, senderUserId, text, "2026-04-20T12:00:00Z");
+            MessageRecord record = new MessageRecord(nextMessageId++, chatId, senderUserId, text, "2026-04-20T12:00:00Z", null);
             messagesById.put(record.messageId(), record);
             directMessages.computeIfAbsent(chatId, ignored -> new ArrayList<>()).add(record);
             return record;
@@ -105,6 +119,37 @@ public final class TestSupport {
         @Override
         public List<MessageRecord> findMessages(long chatId) {
             return List.copyOf(directMessages.getOrDefault(chatId, List.of()));
+        }
+
+        @Override
+        public MessageRecord updateMessage(long messageId, String text) {
+            MessageRecord current = messagesById.get(messageId);
+            if (current == null) {
+                return null;
+            }
+
+            MessageRecord updated = new MessageRecord(
+                    current.messageId(),
+                    current.chatId(),
+                    current.senderUserId(),
+                    text,
+                    current.timestamp(),
+                    "2026-04-20T12:05:00Z"
+            );
+            messagesById.put(messageId, updated);
+
+            List<MessageRecord> messages = directMessages.get(current.chatId());
+            if (messages == null) {
+                return updated;
+            }
+
+            for (int i = 0; i < messages.size(); i++) {
+                if (messages.get(i).messageId() == messageId) {
+                    messages.set(i, updated);
+                    break;
+                }
+            }
+            return updated;
         }
 
         @Override
@@ -131,7 +176,8 @@ public final class TestSupport {
                     chatId,
                     senderUserId,
                     encryptedMessage,
-                    "2026-04-20T12:00:00Z"
+                    "2026-04-20T12:00:00Z",
+                    null
             );
             privateMessages.computeIfAbsent(chatId, ignored -> new ArrayList<>()).add(record);
             return record;

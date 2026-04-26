@@ -109,7 +109,9 @@ class DispatchServicesTest {
         MessageRecord recipientMessage = (MessageRecord) sender.messagesFor("bob-id").getFirst();
         assertThat(recipientMessage.senderUserId()).isEqualTo("alice@example.com");
         assertThat(recipientMessage.text()).isEqualTo("hello");
+        assertThat(recipientMessage.updatedAt()).isNull();
         assertThat(firstTextFrame(aliceOutput)).contains("\"text\":\"hello\"");
+        assertThat(firstTextFrame(aliceOutput)).contains("\"updatedAt\":null");
     }
 
     @Test

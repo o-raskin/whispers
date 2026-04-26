@@ -152,7 +152,7 @@ class ControllerDelegationTest {
         List<com.oraskin.chat.privatechat.value.PrivateMessageView> privateMessages = privateChatsController.getMessages(alice, privateChatSummary.chatId(), "alice-key");
         chatService.sendMessage("alice-id", new com.oraskin.connection.SendMessageCommand(directChat.chatId(), "hello"));
         List<MessageRecord> messages = messagesController.getMessages(alice, directChat.chatId());
-        messagesController.deleteMessage(alice, messages.getFirst().messageId());
+        chatsController.deleteChat(alice, directChat.chatId());
         List<com.oraskin.user.data.domain.User> users = usersController.getUsers(alice);
         UserProfileView userProfileView = usersController.getUserProfile(alice, "bob-id");
 
@@ -161,7 +161,9 @@ class ControllerDelegationTest {
         assertEquals("alice-key", privateChatView.currentUserKey().keyId());
         assertEquals("ciphertext", privateMessages.getFirst().encryptedMessage().ciphertext());
         assertEquals("hello", messages.getFirst().text());
-        assertEquals(List.of(), messagesController.getMessages(alice, directChat.chatId()));
+        assertEquals(List.of(), chatsController.getChats(alice, QueryParams.fromTarget("/chats?keyId=alice-key")).stream()
+                .filter(chat -> chat.chatId() == directChat.chatId())
+                .toList());
         assertEquals("bob@example.com", users.getFirst().username());
         assertEquals("bob@example.com", userProfileView.username());
     }

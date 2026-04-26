@@ -14,6 +14,7 @@ import com.oraskin.chat.privatechat.value.PrivateMessageView;
 import com.oraskin.chat.repository.entity.MessageRecord;
 import com.oraskin.chat.service.ChatService;
 import com.oraskin.chat.value.ChatSummary;
+import com.oraskin.chat.value.EditMessageRequest;
 import com.oraskin.common.auth.AuthenticatedUser;
 import com.oraskin.common.http.QueryParams;
 import com.oraskin.user.data.domain.User;
@@ -76,9 +77,10 @@ class ResourceControllersTest {
                 )
         );
         List<PrivateMessageView> privateMessages = privateChatsController.getMessages(alice, privateChatSummary.chatId(), "alice-key");
-        chatService.sendMessage("alice-id", new com.oraskin.connection.SendMessageCommand(directChat.chatId(), "hello"));
+        MessageRecord message = chatService.sendMessage("alice-id", new com.oraskin.connection.SendMessageCommand(directChat.chatId(), "hello")).message();
+        messagesController.editMessage(alice, message.messageId(), new EditMessageRequest("hello again"));
         List<MessageRecord> messages = messagesController.getMessages(alice, directChat.chatId());
-        messagesController.deleteMessage(alice, messages.getFirst().messageId());
+        chatsController.deleteChat(alice, directChat.chatId());
         List<User> users = usersController.getUsers(alice);
         UserProfileView userProfileView = usersController.getUserProfile(alice, "bob-id");
 
@@ -86,8 +88,11 @@ class ResourceControllersTest {
         assertThat(chats).extracting(ChatSummary::chatId).contains(directChat.chatId());
         assertThat(privateChatView.currentUserKey().keyId()).isEqualTo("alice-key");
         assertThat(privateMessages.getFirst().encryptedMessage().ciphertext()).isEqualTo("ciphertext");
-        assertThat(messages.getFirst().text()).isEqualTo("hello");
-        assertThat(messagesController.getMessages(alice, directChat.chatId())).isEmpty();
+        assertThat(messages.getFirst().text()).isEqualTo("hello again");
+        assertThat(messages.getFirst().updatedAt()).isEqualTo("2026-04-20T12:05:00Z");
+        assertThat(chatsController.getChats(alice, QueryParams.fromTarget("/chats?keyId=alice-key")))
+                .extracting(ChatSummary::chatId)
+                .doesNotContain(directChat.chatId());
         assertThat(users.getFirst().username()).isEqualTo("bob@example.com");
         assertThat(userProfileView.username()).isEqualTo("bob@example.com");
     }

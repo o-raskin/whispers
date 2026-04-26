@@ -2,6 +2,8 @@ package com.oraskin.chat.repository.entity;
 
 import com.oraskin.chat.value.ChatType;
 
+import java.util.List;
+
 public record ChatRecord(
         long chatId,
         String firstUserId,
@@ -17,6 +19,10 @@ public record ChatRecord(
 
     public boolean hasParticipant(String userId) {
         return userId.equals(firstUserId) || userId.equals(secondUserId);
+    }
+
+    public List<String> participantUserIds() {
+        return List.of(firstUserId, secondUserId);
     }
 
     public String keyIdForUser(String userId) {

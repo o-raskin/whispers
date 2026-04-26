@@ -6,6 +6,7 @@ public record PrivateMessageRecord(
         long chatId,
         String senderUserId,
         EncryptedPrivateMessagePayload encryptedMessage,
-        String timestamp
+        String timestamp,
+        String updatedAt
 ) {
 }

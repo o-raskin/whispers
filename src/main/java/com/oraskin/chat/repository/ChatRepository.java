@@ -22,11 +22,15 @@ public interface ChatRepository {
 
     List<ChatRecord> findChatsForUser(String userId);
 
+    void deleteChat(long chatId);
+
     MessageRecord appendMessage(long chatId, String senderUserId, String text);
 
     MessageRecord findMessage(long messageId);
 
     List<MessageRecord> findMessages(long chatId);
+
+    MessageRecord updateMessage(long messageId, String text);
 
     void deleteMessage(long messageId);
 

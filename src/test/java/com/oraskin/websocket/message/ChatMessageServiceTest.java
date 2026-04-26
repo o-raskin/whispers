@@ -42,13 +42,25 @@ class ChatMessageServiceTest {
         MessageRecord recipientMessage = (MessageRecord) sender.messagesFor("bob-id").getFirst();
         assertThat(recipientMessage.senderUserId()).isEqualTo("alice@example.com");
         assertThat(recipientMessage.text()).isEqualTo("hello");
+        assertThat(recipientMessage.updatedAt()).isNull();
         assertThat(firstTextFrame(aliceOutput)).contains("\"text\":\"hello\"");
+        assertThat(firstTextFrame(aliceOutput)).contains("\"updatedAt\":null");
     }
 
     private String firstTextFrame(ByteArrayOutputStream output) {
         byte[] frame = output.toByteArray();
-        int payloadLength = frame[1] & 0x7F;
-        return new String(frame, 2, payloadLength, StandardCharsets.UTF_8);
+        int lengthCode = frame[1] & 0x7F;
+        int headerLength = 2;
+        int payloadLength;
+        if (lengthCode < 126) {
+            payloadLength = lengthCode;
+        } else if (lengthCode == 126) {
+            payloadLength = ((frame[2] & 0xFF) << 8) | (frame[3] & 0xFF);
+            headerLength = 4;
+        } else {
+            throw new IllegalStateException("Test helper does not support 64-bit payload lengths");
+        }
+        return new String(frame, headerLength, payloadLength, StandardCharsets.UTF_8);
     }
 
     private static final class RecordingWebSocketMessageSender implements WebSocketMessageSender {

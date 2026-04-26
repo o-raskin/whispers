@@ -105,11 +105,35 @@ public final class DatabaseChatRepository implements ChatRepository {
     }
 
     @Override
+    public void deleteChat(long chatId) {
+        String sql = """
+                DELETE FROM chats
+                WHERE chat_id = ?
+                """;
+
+        try (Connection connection = connectionFactory.openConnection()) {
+            connection.setAutoCommit(false);
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setLong(1, chatId);
+                statement.executeUpdate();
+                connection.commit();
+            } catch (SQLException e) {
+                rollback(connection, e);
+                throw e;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to delete chat", e);
+        }
+    }
+
+    @Override
     public MessageRecord appendMessage(long chatId, String senderUserId, String text) {
         String sql = """
                 INSERT INTO messages (chat_id, sender_user_id, text, created_at)
                 VALUES (?, ?, ?, ?)
-                RETURNING id, chat_id, sender_user_id, text, created_at
+                RETURNING id, chat_id, sender_user_id, text, created_at, updated_at
                 """;
 
         Instant createdAt = Instant.now(clock);
@@ -134,7 +158,7 @@ public final class DatabaseChatRepository implements ChatRepository {
     @Override
     public MessageRecord findMessage(long messageId) {
         String sql = """
-                SELECT id, chat_id, sender_user_id, text, created_at
+                SELECT id, chat_id, sender_user_id, text, created_at, updated_at
                 FROM messages
                 WHERE id = ?
                 """;
@@ -157,7 +181,7 @@ public final class DatabaseChatRepository implements ChatRepository {
     @Override
     public List<MessageRecord> findMessages(long chatId) {
         String sql = """
-                SELECT id, chat_id, sender_user_id, text, created_at
+                SELECT id, chat_id, sender_user_id, text, created_at, updated_at
                 FROM messages
                 WHERE chat_id = ?
                 ORDER BY id
@@ -176,6 +200,33 @@ public final class DatabaseChatRepository implements ChatRepository {
             }
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to find messages", e);
+        }
+    }
+
+    @Override
+    public MessageRecord updateMessage(long messageId, String text) {
+        String sql = """
+                UPDATE messages
+                SET text = ?, updated_at = ?
+                WHERE id = ?
+                RETURNING id, chat_id, sender_user_id, text, created_at, updated_at
+                """;
+
+        Instant updatedAt = Instant.now(clock);
+        try (Connection connection = connectionFactory.openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, text);
+            statement.setObject(2, OffsetDateTime.ofInstant(updatedAt, ZoneOffset.UTC));
+            statement.setLong(3, messageId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    throw new IllegalStateException("Message update did not return a row");
+                }
+                return mapMessage(resultSet);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to update message", e);
         }
     }
 
@@ -225,7 +276,8 @@ public final class DatabaseChatRepository implements ChatRepository {
                     sender_message_key_envelope,
                     recipient_key_id,
                     recipient_message_key_envelope,
-                    created_at
+                    created_at,
+                    updated_at
                 """;
 
         Instant createdAt = Instant.now(clock);
@@ -270,7 +322,8 @@ public final class DatabaseChatRepository implements ChatRepository {
                     sender_message_key_envelope,
                     recipient_key_id,
                     recipient_message_key_envelope,
-                    created_at
+                    created_at,
+                    updated_at
                 FROM private_messages
                 WHERE chat_id = ?
                 ORDER BY id
@@ -327,7 +380,8 @@ public final class DatabaseChatRepository implements ChatRepository {
                 resultSet.getLong("chat_id"),
                 resultSet.getString("sender_user_id"),
                 resultSet.getString("text"),
-                mapTimestamp(resultSet)
+                mapTimestamp(resultSet, "created_at"),
+                mapTimestamp(resultSet, "updated_at")
         );
     }
 
@@ -348,17 +402,26 @@ public final class DatabaseChatRepository implements ChatRepository {
                 resultSet.getLong("chat_id"),
                 resultSet.getString("sender_user_id"),
                 encryptedMessage,
-                mapTimestamp(resultSet)
+                mapTimestamp(resultSet, "created_at"),
+                mapTimestamp(resultSet, "updated_at")
         );
     }
 
-    private String mapTimestamp(ResultSet resultSet) throws SQLException {
-        OffsetDateTime createdAt = resultSet.getObject("created_at", OffsetDateTime.class);
-        if (createdAt != null) {
-            return createdAt.toInstant().toString();
+    private String mapTimestamp(ResultSet resultSet, String columnName) throws SQLException {
+        OffsetDateTime timestamp = resultSet.getObject(columnName, OffsetDateTime.class);
+        if (timestamp != null) {
+            return timestamp.toInstant().toString();
         }
 
-        Timestamp timestamp = resultSet.getTimestamp("created_at");
-        return timestamp == null ? null : timestamp.toInstant().toString();
+        Timestamp fallback = resultSet.getTimestamp(columnName);
+        return fallback == null ? null : fallback.toInstant().toString();
+    }
+
+    private void rollback(Connection connection, SQLException originalFailure) {
+        try {
+            connection.rollback();
+        } catch (SQLException rollbackFailure) {
+            originalFailure.addSuppressed(rollbackFailure);
+        }
     }
 }

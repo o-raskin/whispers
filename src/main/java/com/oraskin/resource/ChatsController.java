@@ -4,6 +4,7 @@ import com.oraskin.chat.service.ChatService;
 import com.oraskin.chat.value.ChatSummary;
 import com.oraskin.common.auth.AuthenticatedUser;
 import com.oraskin.common.http.QueryParams;
+import com.oraskin.common.mvc.annotation.PathVariable;
 import com.oraskin.common.mvc.annotation.RequestMapping;
 import com.oraskin.common.mvc.annotation.RequestParam;
 import com.oraskin.common.mvc.annotation.RestController;
@@ -30,5 +31,13 @@ public final class ChatsController {
             @RequestParam("targetUserId") String targetUserId
     ) {
         return chatService.createChat(user.userId(), targetUserId);
+    }
+
+    @RequestMapping(method = "DELETE", value = "/{chatId}")
+    public void deleteChat(
+            AuthenticatedUser user,
+            @PathVariable("chatId") long chatId
+    ) {
+        chatService.deleteChat(user.userId(), chatId);
     }
 }
